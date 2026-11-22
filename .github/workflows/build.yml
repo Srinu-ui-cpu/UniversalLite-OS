@@ -60,12 +60,11 @@ jobs:
       - name: Set up build environment
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
+          sudo apt-get install -y --no-install-recommends \
             live-build \
             xorriso \
             grub-efi-amd64 \
             grub-pc \
-            shim-signed \
             dosfstools \
             mtools \
             efibootmgr \
@@ -82,7 +81,8 @@ jobs:
             squashfs-tools \
             erofs-utils \
             zstd \
-            b3sum
+            b3sum \
+            || (sudo apt-get update --fix-missing && sudo apt-get install -y --no-install-recommends live-build xorriso grub-efi-amd64 grub-pc dosfstools mtools efibootmgr curl wget git python3 python3-pip nodejs npm qemu-user-static binfmt-support debootstrap squashfs-tools erofs-utils zstd b3sum)
       
       - name: Enable binfmt for cross-compilation
         run: |
@@ -181,12 +181,11 @@ jobs:
       - name: Set up build environment
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
+          sudo apt-get install -y --no-install-recommends \
             live-build \
             xorriso \
             grub-efi-arm64 \
             grub-efi-amd64 \
-            shim-signed \
             dosfstools \
             mtools \
             efibootmgr \
@@ -207,7 +206,8 @@ jobs:
             gcc-aarch64-linux-gnu \
             g++-aarch64-linux-gnu \
             u-boot-tools \
-            device-tree-compiler
+            device-tree-compiler \
+            || (sudo apt-get update --fix-missing && sudo apt-get install -y --no-install-recommends live-build xorriso grub-efi-arm64 grub-efi-amd64 dosfstools mtools efibootmgr curl wget git python3 python3-pip nodejs npm qemu-user-static binfmt-support debootstrap squashfs-tools erofs-utils zstd b3sum gcc-aarch64-linux-gnu g++-aarch64-linux-gnu u-boot-tools device-tree-compiler)
       
       - name: Enable binfmt for cross-compilation
         run: |
@@ -321,12 +321,11 @@ jobs:
       - name: Set up build environment
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
+          sudo apt-get install -y --no-install-recommends \
             live-build \
             xorriso \
             grub-efi-arm64 \
             grub-efi-amd64 \
-            shim-signed \
             dosfstools \
             mtools \
             efibootmgr \
@@ -347,7 +346,8 @@ jobs:
             gcc-arm-linux-gnueabihf \
             g++-arm-linux-gnueabihf \
             u-boot-tools \
-            device-tree-compiler
+            device-tree-compiler \
+            || (sudo apt-get update --fix-missing && sudo apt-get install -y --no-install-recommends live-build xorriso grub-efi-arm64 grub-efi-amd64 dosfstools mtools efibootmgr curl wget git python3 python3-pip nodejs npm qemu-user-static binfmt-support debootstrap squashfs-tools erofs-utils zstd b3sum gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf u-boot-tools device-tree-compiler)
       
       - name: Enable binfmt for cross-compilation
         run: |
