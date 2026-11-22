@@ -83,14 +83,12 @@ lb config noauto \
     --binary-filesystem ext4 \
     --binary-images iso-hybrid \
     --bootappend-live "boot=live quiet splash" \
-    --bootloader "grub-efi,syslinux" \
     --chroot-filesystem ext4 \
     --compression gzip \
     --debootstrap-options "--variant=minbase" \
     --iso-application "UniversalLite OS" \
     --iso-volume "UniversalLite" \
-    --mode debian \
-    --security true || {
+    --mode debian || {
         echo "ERROR: lb config failed"
         exit 1
     }
