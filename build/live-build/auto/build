@@ -50,8 +50,7 @@ lb config noauto \
     --iso-application "UniversalLite OS" \
     --iso-publisher "UniversalLite OS Project" \
     --iso-volume "UniversalLite_$(date +%Y%m%d-%H%M)" \
-    --linux-flavours "universallite" \
-    --linux-packages "linux-image linux-headers" \
+    --linux-images "linux-image-${ARCH}" \
     --memtest none \
     --mode debian \
     --parent-archive-areas "main contrib non-free non-free-firmware" \
