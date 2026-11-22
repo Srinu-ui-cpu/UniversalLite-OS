@@ -63,8 +63,9 @@ jobs:
           sudo apt-get install -y --no-install-recommends software-properties-common
           sudo add-apt-repository -y universe
           sudo apt-get update
-          # Install core packages available in Ubuntu repos
+          # Install all required packages from Ubuntu repos
           sudo apt-get install -y --no-install-recommends \
+            live-build \
             xorriso \
             grub-efi-amd64 \
             grub-pc \
@@ -82,30 +83,12 @@ jobs:
             binfmt-support \
             debootstrap \
             squashfs-tools \
+            erofs-utils \
             zstd \
-            || true
-          # Install live-build from source (not in Ubuntu repos)
-          sudo apt-get install -y --no-install-recommends devscripts equivs || true
-          git clone https://salsa.debian.org/live-team/live-build.git /tmp/live-build \
-            && cd /tmp/live-build \
-            && dpkg-buildpackage -b -us -uc \
-            && sudo dpkg -i ../live-build_*.deb || true
-          # Install erofs-utils from source
-          git clone https://git.kernel.org/pub/scm/linux/kernel/git/xiang/erofs-utils.git /tmp/erofs-utils \
-            && cd /tmp/erofs-utils \
-            && ./autogen.sh \
-            && ./configure \
-            && make -j$(nproc) \
-            && sudo make install || true
-          # Install b3sum (b3) from cargo if not available
-          if ! command -v b3sum &> /dev/null; then
-            sudo apt-get install -y --no-install-recommends cargo || true
-            cargo install b3sum --locked || true
-            sudo cp ~/.cargo/bin/b3sum /usr/local/bin/ 2>/dev/null || true
-          fi
-          # Install shim-signed for Secure Boot (download from Debian)
-          wget -q http://ftp.debian.org/debian/pool/main/s/shim-signed/shim-signed_1.61_amd64.deb -O /tmp/shim-signed.deb \
-            && sudo dpkg -i /tmp/shim-signed.deb || true
+            # Verify live-build installation
+          lb --version
+          # Verify erofs-utils
+          mkfs.erofs --version 2>/dev/null || echo "erofs-utils not fully available, will use fallback"
       
       - name: Enable binfmt for cross-compilation
         run: |
@@ -190,7 +173,6 @@ jobs:
           for f in universalite-${{ matrix.distribution }}-amd64-${{ matrix.variant }}*.iso; do
             sha256sum "$f" > "$f.sha256"
             sha512sum "$f" > "$f.sha512"
-            b3sum "$f" > "$f.b3sum" 2>/dev/null || true
           done
           ls -la
       
@@ -230,8 +212,9 @@ jobs:
           sudo apt-get install -y --no-install-recommends software-properties-common
           sudo add-apt-repository -y universe
           sudo apt-get update
-          # Install core packages available in Ubuntu repos
+          # Install all required packages from Ubuntu repos
           sudo apt-get install -y --no-install-recommends \
+            live-build \
             xorriso \
             grub-efi-arm64 \
             grub-efi-amd64 \
@@ -249,34 +232,16 @@ jobs:
             binfmt-support \
             debootstrap \
             squashfs-tools \
+            erofs-utils \
             zstd \
             gcc-aarch64-linux-gnu \
             g++-aarch64-linux-gnu \
             u-boot-tools \
             device-tree-compiler \
-            || true
-          # Install live-build from source (not in Ubuntu repos)
-          sudo apt-get install -y --no-install-recommends devscripts equivs || true
-          git clone https://salsa.debian.org/live-team/live-build.git /tmp/live-build \
-            && cd /tmp/live-build \
-            && dpkg-buildpackage -b -us -uc \
-            && sudo dpkg -i ../live-build_*.deb || true
-          # Install erofs-utils from source
-          git clone https://git.kernel.org/pub/scm/linux/kernel/git/xiang/erofs-utils.git /tmp/erofs-utils \
-            && cd /tmp/erofs-utils \
-            && ./autogen.sh \
-            && ./configure \
-            && make -j$(nproc) \
-            && sudo make install || true
-          # Install b3sum (b3) from cargo if not available
-          if ! command -v b3sum &> /dev/null; then
-            sudo apt-get install -y --no-install-recommends cargo || true
-            cargo install b3sum --locked || true
-            sudo cp ~/.cargo/bin/b3sum /usr/local/bin/ 2>/dev/null || true
-          fi
-          # Install shim-signed for Secure Boot (download from Debian - ARM64)
-          wget -q http://ftp.debian.org/debian/pool/main/s/shim-signed/shim-signed_1.61_arm64.deb -O /tmp/shim-signed.deb \
-            && sudo dpkg -i /tmp/shim-signed.deb || true
+            # Verify live-build installation
+          lb --version
+          # Verify erofs-utils
+          mkfs.erofs --version 2>/dev/null || echo "erofs-utils not fully available, will use fallback"
       
       - name: Enable binfmt for cross-compilation
         run: |
@@ -373,12 +338,10 @@ jobs:
           for f in universalite-${{ matrix.distribution }}-arm64-${{ matrix.variant }}*.iso; do
             sha256sum "$f" > "$f.sha256"
             sha512sum "$f" > "$f.sha512"
-            b3sum "$f" > "$f.b3sum" 2>/dev/null || true
           done
           for f in universalite-${{ matrix.distribution }}-arm64-${{ matrix.variant }}*.img.xz; do
             sha256sum "$f" > "$f.sha256"
             sha512sum "$f" > "$f.sha512"
-            b3sum "$f" > "$f.b3sum" 2>/dev/null || true
           done
           ls -la
       
@@ -416,8 +379,9 @@ jobs:
           sudo apt-get install -y --no-install-recommends software-properties-common
           sudo add-apt-repository -y universe
           sudo apt-get update
-          # Install core packages available in Ubuntu repos
+          # Install all required packages from Ubuntu repos
           sudo apt-get install -y --no-install-recommends \
+            live-build \
             xorriso \
             grub-efi-arm64 \
             grub-efi-amd64 \
@@ -435,34 +399,16 @@ jobs:
             binfmt-support \
             debootstrap \
             squashfs-tools \
+            erofs-utils \
             zstd \
             gcc-arm-linux-gnueabihf \
             g++-arm-linux-gnueabihf \
             u-boot-tools \
             device-tree-compiler \
-            || true
-          # Install live-build from source (not in Ubuntu repos)
-          sudo apt-get install -y --no-install-recommends devscripts equivs || true
-          git clone https://salsa.debian.org/live-team/live-build.git /tmp/live-build \
-            && cd /tmp/live-build \
-            && dpkg-buildpackage -b -us -uc \
-            && sudo dpkg -i ../live-build_*.deb || true
-          # Install erofs-utils from source
-          git clone https://git.kernel.org/pub/scm/linux/kernel/git/xiang/erofs-utils.git /tmp/erofs-utils \
-            && cd /tmp/erofs-utils \
-            && ./autogen.sh \
-            && ./configure \
-            && make -j$(nproc) \
-            && sudo make install || true
-          # Install b3sum (b3) from cargo if not available
-          if ! command -v b3sum &> /dev/null; then
-            sudo apt-get install -y --no-install-recommends cargo || true
-            cargo install b3sum --locked || true
-            sudo cp ~/.cargo/bin/b3sum /usr/local/bin/ 2>/dev/null || true
-          fi
-          # Install shim-signed for Secure Boot (download from Debian - ARMhf uses arm64 shim)
-          wget -q http://ftp.debian.org/debian/pool/main/s/shim-signed/shim-signed_1.61_arm64.deb -O /tmp/shim-signed.deb \
-            && sudo dpkg -i /tmp/shim-signed.deb || true
+            # Verify live-build installation
+          lb --version
+          # Verify erofs-utils
+          mkfs.erofs --version 2>/dev/null || echo "erofs-utils not fully available, will use fallback"
       
       - name: Enable binfmt for cross-compilation
         run: |
@@ -535,12 +481,10 @@ jobs:
           for f in universalite-${{ matrix.distribution }}-armhf-${{ matrix.variant }}*.iso; do
             sha256sum "$f" > "$f.sha256"
             sha512sum "$f" > "$f.sha512"
-            b3sum "$f" > "$f.b3sum" 2>/dev/null || true
           done
           for f in universalite-${{ matrix.distribution }}-armhf-${{ matrix.variant }}*.img.xz; do
             sha256sum "$f" > "$f.sha256"
             sha512sum "$f" > "$f.sha512"
-            b3sum "$f" > "$f.b3sum" 2>/dev/null || true
           done
           ls -la
       
@@ -608,7 +552,6 @@ jobs:
           cp artifacts/**/*.img.xz release-assets/ 2>/dev/null || true
           cp artifacts/**/*.sha256 release-assets/ 2>/dev/null || true
           cp artifacts/**/*.sha512 release-assets/ 2>/dev/null || true
-          cp artifacts/**/*.b3sum release-assets/ 2>/dev/null || true
           ls -la release-assets/
       
       - name: Generate release notes
