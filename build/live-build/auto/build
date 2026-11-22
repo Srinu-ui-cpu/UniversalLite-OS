@@ -4,14 +4,36 @@
 
 set -o pipefail
 
+# Configuration - accept command line args or use environment variables
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --arch)
+            ARCH="$2"
+            shift 2
+            ;;
+        --distribution)
+            DISTRIBUTION="$2"
+            shift 2
+            ;;
+        --variant)
+            VARIANT="$2"
+            shift 2
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
+# Environment variables as fallback
+ARCH="${ARCH:-$(dpkg --print-architecture 2>/dev/null || echo amd64)}"
+DISTRIBUTION="${DISTRIBUTION:-trixie}"
+VARIANT="${VARIANT:-balanced}"
+
 # Configuration
 export LB_BOOTSTRAP_INCLUDE="apt-transport-https ca-certificates curl gnupg"
 export DEBIAN_FRONTEND=noninteractive
-
-# Architecture detection
-ARCH="${ARCH:-$(dpkg --print-architecture)}"
-DISTRIBUTION="${DISTRIBUTION:-trixie}"
-VARIANT="${VARIANT:-balanced}"
 
 echo "=== UniversalLite OS Build ==="
 echo "Architecture: $ARCH"
@@ -20,15 +42,15 @@ echo "Variant: $VARIANT"
 
 # Map architecture to correct names
 case "$ARCH" in
-    amd64)
+    amd64|x86_64)
         ARCHIVE="amd64"
         KERNEL_PKG="linux-image-amd64"
         ;;
-    arm64)
+    arm64|aarch64)
         ARCHIVE="arm64"
         KERNEL_PKG="linux-image-arm64"
         ;;
-    armhf)
+    armhf|arm)
         ARCHIVE="armhf"
         KERNEL_PKG="linux-image-armmp"
         ;;
@@ -40,6 +62,14 @@ esac
 
 echo "Using archive: $ARCHIVE, kernel: $KERNEL_PKG"
 
+# Verify live-build is installed
+if ! command -v lb &> /dev/null; then
+    echo "ERROR: lb command not found - live-build may not be installed"
+    exit 1
+fi
+
+echo "lb version: $(lb --version 2>/dev/null || echo 'unknown')"
+
 # Clean previous build
 lb clean --purge 2>/dev/null || true
 
@@ -49,9 +79,7 @@ echo "Configuring live-build..."
 lb config noauto \
     --architectures "$ARCHIVE" \
     --distribution "$DISTRIBUTION" \
-    --archive-areas "main contrib non-free non-free-firmware" \
-    --apt-indices false \
-    --apt-recommends false \
+    --archive-areas "main contrib non-free" \
     --binary-filesystem ext4 \
     --binary-images iso-hybrid \
     --bootappend-live "boot=live quiet splash" \
@@ -59,16 +87,11 @@ lb config noauto \
     --chroot-filesystem ext4 \
     --compression gzip \
     --debootstrap-options "--variant=minbase" \
-    --firmware-binary true \
-    --firmware-chroot true \
     --iso-application "UniversalLite OS" \
     --iso-volume "UniversalLite" \
     --mode debian \
     --security true \
-    --source false \
-    --system normal \
-    --variant "$VARIANT" \
-    "${@}" || {
+    --variant "$VARIANT" || {
         echo "ERROR: lb config failed"
         exit 1
     }
