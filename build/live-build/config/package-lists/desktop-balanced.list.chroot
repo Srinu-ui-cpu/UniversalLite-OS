@@ -1,0 +1,104 @@
+# UniversalLite OS - Desktop Packages (Balanced Variant)
+# Recommended everyday configuration
+
+# Include Ultra Lite base
+# (live-build merges all .list.chroot files)
+
+# Wayland Compositor & Shell
+labwc
+waybar
+mako-notifier
+swaylock-effects
+swww
+wl-clipboard
+wlr-randr
+wlr-ctl
+xdg-desktop-portal-wlr
+xdg-desktop-portal-gtk
+
+# Terminal & File Manager
+foot
+thunar
+thunar-archive-plugin
+thunar-volman
+tumbler
+ffmpegthumbnailer
+
+# Launcher & Menu (Custom GTK4 launcher)
+universallite-launcher
+
+# Settings & System Tools
+grim
+slurp
+swappy
+wl-gammactl
+brightnessctl
+playerctl
+pamixer
+pulsemixer
+gnome-keyring
+seahorse
+
+# Fonts & Themes
+fonts-dejavu
+fonts-liberation
+fonts-noto
+fonts-noto-color-emoji
+fonts-jetbrains-mono
+adwaita-icon-theme
+gtk4-nocsd
+libadwaita-1-dev
+
+# Authentication
+polkit-kde-agent-1
+
+# Wallpapers
+universallite-wallpapers
+
+# Audio (PipeWire - enabled in Balanced)
+pipewire
+pipewire-pulse
+wireplumber
+libspa-0.2-bluetooth
+pavucontrol
+
+# Bluetooth
+bluez
+bluez-tools
+bluetuith
+gnome-bluetooth-3.0
+
+# Network (NetworkManager for WiFi ease)
+network-manager
+network-manager-gnome
+nm-tray
+
+# Automount
+udiskie
+gvfs
+gvfs-backends
+
+# Notifications (full)
+mako-notifier
+libnotify-bin
+
+# Power Management
+upower
+tlp
+tlp-rdw
+
+# Screenshot & Recording
+grim
+slurp
+swappy
+wf-recorder
+obs-studio
+
+# Clipboard History
+cliphist
+
+# Virtual Desktops indicator
+waybar-module-workspaces
+
+# Balanced: All core desktop services enabled
+# PipeWire, Bluetooth, NetworkManager, Automount, Notifications

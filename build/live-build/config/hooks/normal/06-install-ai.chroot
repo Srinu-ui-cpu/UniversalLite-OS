@@ -1,0 +1,560 @@
+#!/bin/bash
+# Hook: 06-install-ai
+# Install Universal AI (optional, socket-activated)
+
+set -euo pipefail
+
+echo "=== Installing Universal AI (Optional) ==="
+
+# This hook only installs the AI components
+# The service is socket-activated and uses ZERO memory when not in use
+
+# Install AI runtime dependencies
+apt-get update
+apt-get install -y --no-install-recommends \
+    python3 \
+    python3-venv \
+    python3-numpy \
+    python3-scipy \
+    python3-tokenizers \
+    python3-huggingface-hub \
+    python3-transformers \
+    python3-accelerate \
+    python3-safetensors \
+    python3-gguf \
+    python3-openai \
+    python3-anthropic \
+    python3-google-generativeai \
+    python3-cryptography \
+    python3-sqlcipher3 \
+    python3-dbus \
+    python3-gobject \
+    python3-systemd \
+    llama.cpp \
+    llama.cpp-tools \
+    onnxruntime \
+    onnxruntime-tools
+
+# Create AI service directory
+mkdir -p /usr/libexec/universal-ai
+mkdir -p /etc/universal-ai
+mkdir -p /usr/share/universal-ai/tools
+
+# Universal AI Daemon (socket-activated)
+cat > /usr/libexec/universal-ai/daemon.py << 'EOF'
+#!/usr/bin/env python3
+"""
+Universal AI Daemon - Socket-activated systemd user service
+Zero memory when not in use. Starts on first D-Bus/CLI request.
+"""
+
+import json
+import os
+import sys
+import sqlite3
+import subprocess
+import threading
+import time
+from pathlib import Path
+from typing import Dict, List, Optional, Any
+from dataclasses import dataclass, asdict
+from enum import Enum
+
+import dbus
+import dbus.service
+import dbus.mainloop.glib
+from gi.repository import GLib
+
+class ModelProvider(Enum):
+    LOCAL_LLAMA = "local_llama"
+    LOCAL_ONNX = "local_onnx"
+    OPENROUTER = "openrouter"
+    GEMINI = "gemini"
+    ANTHROPIC = "anthropic"
+    OPENAI = "openai"
+    CUSTOM = "custom"
+
+@dataclass
+class ToolResult:
+    success: bool
+    output: str
+    error: Optional[str] = None
+
+class UniversalAIService(dbus.service.Object):
+    def __init__(self, bus_name, object_path="/org/universallite/AI"):
+        super().__init__(bus_name, object_path)
+        self.config = self._load_config()
+        self.memory_db = self._init_memory()
+        self.models = {}
+        self.tools = self._register_tools()
+    
+    def _load_config(self) -> Dict:
+        config_path = Path.home() / ".config/universal-ai/config.json"
+        default_config = {
+            "providers": {
+                "local_llama": {"enabled": True, "model_path": "~/.local/share/universal-ai/models/"},
+                "openrouter": {"enabled": False, "api_key": "", "model": "openrouter/auto"},
+                "gemini": {"enabled": False, "api_key": "", "model": "gemini-pro"},
+                "anthropic": {"enabled": False, "api_key": "", "model": "claude-3-haiku"},
+                "openai": {"enabled": False, "api_key": "", "model": "gpt-4o-mini"},
+            },
+            "default_provider": "local_llama",
+            "permissions": {
+                "file_read": True,
+                "file_write": False,
+                "app_launch": True,
+                "package_install": False,
+                "terminal_command": False,
+                "system_settings": False,
+            },
+            "confirm_destructive": True,
+        }
+        
+        if config_path.exists():
+            with open(config_path) as f:
+                user_config = json.load(f)
+                # Merge with defaults
+                for key, value in default_config.items():
+                    if key not in user_config:
+                        user_config[key] = value
+                return user_config
+        return default_config
+    
+    def _init_memory(self) -> sqlite3.Connection:
+        db_path = Path.home() / ".local/share/universal-ai/memory.db"
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(db_path)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS conversations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                provider TEXT,
+                model TEXT,
+                messages TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS facts (
+                key TEXT PRIMARY KEY,
+                value TEXT,
+                updated DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.commit()
+        return conn
+    
+    def _register_tools(self) -> Dict:
+        return {
+            "search_files": self._tool_search_files,
+            "read_file": self._tool_read_file,
+            "write_file": self._tool_write_file,
+            "launch_app": self._tool_launch_app,
+            "install_package": self._tool_install_package,
+            "run_terminal": self._tool_run_terminal,
+            "get_system_info": self._tool_get_system_info,
+            "get_settings": self._tool_get_settings,
+            "set_setting": self._tool_set_setting,
+        }
+    
+    # D-Bus Methods
+    @dbus.service.method("org.universallite.AI", in_signature="s", out_signature="s")
+    def Chat(self, message: str) -> str:
+        """Process a chat message and return response"""
+        # This would integrate with the selected provider
+        # For now, return a placeholder
+        return json.dumps({
+            "response": f"Universal AI received: {message}",
+            "provider": self.config["default_provider"],
+            "tools_used": []
+        })
+    
+    @dbus.service.method("org.universallite.AI", in_signature="ss", out_signature="s")
+    def CallTool(self, tool_name: str, params_json: str) -> str:
+        """Call a registered tool"""
+        if tool_name not in self.tools:
+            return json.dumps({"success": False, "error": f"Unknown tool: {tool_name}"})
+        
+        try:
+            params = json.loads(params_json)
+            result = self.tools[tool_name](**params)
+            return json.dumps(asdict(result))
+        except Exception as e:
+            return json.dumps({"success": False, "error": str(e)})
+    
+    @dbus.service.method("org.universallite.AI", out_signature="s")
+    def GetTools(self) -> str:
+        """List available tools"""
+        return json.dumps({
+            name: {"description": func.__doc__} 
+            for name, func in self.tools.items()
+        })
+    
+    @dbus.service.method("org.universallite.AI", out_signature="s")
+    def GetConfig(self) -> str:
+        """Get current configuration (without API keys)"""
+        safe_config = self.config.copy()
+        for provider in safe_config.get("providers", {}).values():
+            provider.pop("api_key", None)
+        return json.dumps(safe_config)
+    
+    @dbus.service.method("org.universallite.AI", in_signature="s", out_signature="s")
+    def SetConfig(self, config_json: str) -> str:
+        """Update configuration"""
+        try:
+            new_config = json.loads(config_json)
+            # Validate and merge
+            self.config.update(new_config)
+            self._save_config()
+            return json.dumps({"success": True})
+        except Exception as e:
+            return json.dumps({"success": False, "error": str(e)})
+    
+    # Tool Implementations
+    def _tool_search_files(self, query: str, path: str = "~", limit: int = 20) -> ToolResult:
+        """Search for files by name or content"""
+        try:
+            path = os.path.expanduser(path)
+            result = subprocess.run(
+                ["find", path, "-type", "f", "-name", f"*{query}*"],
+                capture_output=True, text=True, timeout=30
+            )
+            files = result.stdout.strip().split("\n")[:limit]
+            return ToolResult(True, json.dumps(files))
+        except Exception as e:
+            return ToolResult(False, "", str(e))
+    
+    def _tool_read_file(self, path: str, limit: int = 1000) -> ToolResult:
+        """Read a file's contents"""
+        try:
+            path = os.path.expanduser(path)
+            with open(path, "r") as f:
+                content = f.read(limit * 100)  # Rough char limit
+            return ToolResult(True, content)
+        except Exception as e:
+            return ToolResult(False, "", str(e))
+    
+    def _tool_write_file(self, path: str, content: str) -> ToolResult:
+        """Write content to a file (requires permission)"""
+        if not self.config["permissions"].get("file_write", False):
+            return ToolResult(False, "", "File write permission denied")
+        try:
+            path = os.path.expanduser(path)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w") as f:
+                f.write(content)
+            return ToolResult(True, f"Written to {path}")
+        except Exception as e:
+            return ToolResult(False, "", str(e))
+    
+    def _tool_launch_app(self, app_id: str) -> ToolResult:
+        """Launch an application by desktop ID"""
+        if not self.config["permissions"].get("app_launch", False):
+            return ToolResult(False, "", "App launch permission denied")
+        try:
+            subprocess.Popen(["gtk-launch", app_id], start_new_session=True)
+            return ToolResult(True, f"Launched {app_id}")
+        except Exception as e:
+            return ToolResult(False, "", str(e))
+    
+    def _tool_install_package(self, package: str, source: str = "auto") -> ToolResult:
+        """Install a package (requires permission)"""
+        if not self.config["permissions"].get("package_install", False):
+            return ToolResult(False, "", "Package install permission denied")
+        try:
+            result = subprocess.run(
+                ["universal-appcenter", "install", f"{source}:{package}"],
+                capture_output=True, text=True, timeout=300
+            )
+            return ToolResult(result.returncode == 0, result.stdout, result.stderr if result.returncode != 0 else None)
+        except Exception as e:
+            return ToolResult(False, "", str(e))
+    
+    def _tool_run_terminal(self, command: str) -> ToolResult:
+        """Run a terminal command (requires permission)"""
+        if not self.config["permissions"].get("terminal_command", False):
+            return ToolResult(False, "", "Terminal command permission denied")
+        if self.config["confirm_destructive"]:
+            # In production, would prompt user via D-Bus
+            return ToolResult(False, "", "Confirmation required for terminal commands")
+        try:
+            result = subprocess.run(
+                command, shell=True, capture_output=True, text=True, timeout=60
+            )
+            return ToolResult(result.returncode == 0, result.stdout, result.stderr if result.returncode != 0 else None)
+        except Exception as e:
+            return ToolResult(False, "", str(e))
+    
+    def _tool_get_system_info(self) -> ToolResult:
+        """Get system information"""
+        try:
+            import psutil
+            info = {
+                "cpu_percent": psutil.cpu_percent(interval=1),
+                "memory_percent": psutil.virtual_memory().percent,
+                "disk_percent": psutil.disk_usage("/").percent,
+                "boot_time": psutil.boot_time(),
+            }
+            return ToolResult(True, json.dumps(info))
+        except Exception as e:
+            return ToolResult(False, "", str(e))
+    
+    def _tool_get_settings(self, category: str = "all") -> ToolResult:
+        """Get system settings"""
+        # Would integrate with system settings
+        return ToolResult(True, json.dumps({"note": "Settings integration pending"}))
+    
+    def _tool_set_setting(self, category: str, key: str, value: str) -> ToolResult:
+        """Set a system setting (requires permission)"""
+        if not self.config["permissions"].get("system_settings", False):
+            return ToolResult(False, "", "System settings permission denied")
+        return ToolResult(True, json.dumps({"note": "Settings integration pending"}))
+    
+    def _save_config(self):
+        config_path = Path.home() / ".config/universal-ai/config.json"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(config_path, "w") as f:
+            json.dump(self.config, f, indent=2)
+
+def main():
+    # Initialize D-Bus main loop
+    dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
+    
+    # Get session bus
+    bus = dbus.SessionBus()
+    
+    # Register service name
+    name = dbus.service.BusName("org.universallite.AI", bus)
+    
+    # Create service object
+    service = UniversalAIService(name)
+    
+    # Run main loop
+    loop = GLib.MainLoop()
+    print("Universal AI Daemon started", file=sys.stderr)
+    loop.run()
+
+if __name__ == "__main__":
+    main()
+EOF
+chmod +x /usr/libexec/universal-ai/daemon.py
+
+# Systemd User Service (Socket-Activated)
+cat > /usr/lib/systemd/user/universal-ai-daemon.service << 'EOF'
+[Unit]
+Description=Universal AI Assistant Daemon
+Documentation=https://universallite.os/docs/ai
+After=graphical-session.target
+ConditionPathExists=!/etc/universal-ai/disabled
+
+[Service]
+Type=dbus
+BusName=org.universallite.AI
+ExecStart=/usr/libexec/universal-ai/daemon.py
+Restart=on-failure
+RestartSec=5
+MemoryLimit=500M
+CPUQuota=50%
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=~/.local/share/universal-ai
+ReadWritePaths=~/.config/universal-ai
+ReadWritePaths=~/.cache/universal-ai
+
+[Install]
+WantedBy=default.target
+EOF
+
+# Socket Activation
+cat > /usr/lib/systemd/user/universal-ai.socket << 'EOF'
+[Unit]
+Description=Universal AI Activation Socket
+
+[Socket]
+ListenStream=%t/universal-ai.socket
+SocketMode=0666
+
+[Install]
+WantedBy=sockets.target
+EOF
+
+cat > /usr/lib/systemd/user/universal-ai-daemon.service.d/override.conf << 'EOF'
+[Service]
+Sockets=universal-ai.socket
+EOF
+
+# D-Bus Service File
+mkdir -p /usr/share/dbus-1/services
+cat > /usr/share/dbus-1/services/org.universallite.AI.service << 'EOF'
+[D-BUS Service]
+Name=org.universallite.AI
+Exec=/usr/libexec/universal-ai/daemon.py
+User=universalite
+SystemdService=universal-ai-daemon.service
+EOF
+
+# CLI Tool
+cat > /usr/bin/ul-ai << 'EOF'
+#!/bin/bash
+# Universal AI CLI
+
+set -euo pipefail
+
+if [[ $# -eq 0 ]]; then
+    echo "Usage: ul-ai <query>"
+    echo "       ul-ai --config"
+    echo "       ul-ai --tools"
+    exit 1
+fi
+
+if [[ "$1" == "--config" ]]; then
+    busctl --user call org.universallite.AI /org/universallite/AI org.universallite.AI GetConfig
+    exit 0
+fi
+
+if [[ "$1" == "--tools" ]]; then
+    busctl --user call org.universallite.AI /org/universallite/AI org.universallite.AI GetTools
+    exit 0
+fi
+
+# Send chat message
+QUERY="$*"
+busctl --user call org.universallite.AI /org/universallite/AI org.universallite.AI Chat s "$QUERY"
+EOF
+chmod +x /usr/bin/ul-ai
+
+# Desktop Integration
+mkdir -p /usr/share/applications
+cat > /usr/share/applications/universal-ai.desktop << 'EOF'
+[Desktop Entry]
+Type=Application
+Name=Universal AI
+Comment=AI Assistant for UniversalLite OS
+Exec=ul-ai --gui
+Icon=org.universallite.AI
+Terminal=false
+Categories=System;Utility;AI;
+StartupNotify=true
+Keywords=ai;assistant;chat;llm;
+EOF
+
+# Launcher Search Provider (for wofi/launcher)
+mkdir -p /usr/share/universal-ai/launcher
+cat > /usr/share/universal-ai/launcher/search-provider.py << 'EOF'
+#!/usr/bin/env python3
+"""Search provider for Universal AI - integrates with launcher"""
+import sys
+import json
+import subprocess
+
+def main():
+    query = sys.argv[1] if len(sys.argv) > 1 else ""
+    if query.startswith("ai ") or query.startswith("ask "):
+        # Trigger AI response
+        result = subprocess.run(
+            ["ul-ai", query],
+            capture_output=True, text=True
+        )
+        print(json.dumps([{
+            "id": "ai-response",
+            "name": f"🤖 Ask AI: {query[3:]}",
+            "description": result.stdout[:200],
+            "action": "ai-chat"
+        }]))
+    else:
+        print(json.dumps([]))
+
+if __name__ == "__main__":
+    main()
+EOF
+chmod +x /usr/share/universal-ai/launcher/search-provider.py
+
+# Configuration Directory
+mkdir -p /etc/universal-ai
+cat > /etc/universal-ai/config.json.example << 'EOF'
+{
+  "providers": {
+    "local_llama": {
+      "enabled": true,
+      "model_path": "~/.local/share/universal-ai/models/",
+      "model": "llama-3.2-3b-instruct.Q4_K_M.gguf"
+    },
+    "openrouter": {
+      "enabled": false,
+      "api_key": "",
+      "model": "openrouter/auto"
+    },
+    "gemini": {
+      "enabled": false,
+      "api_key": "",
+      "model": "gemini-1.5-flash"
+    },
+    "anthropic": {
+      "enabled": false,
+      "api_key": "",
+      "model": "claude-3-haiku-20240307"
+    },
+    "openai": {
+      "enabled": false,
+      "api_key": "",
+      "model": "gpt-4o-mini"
+    }
+  },
+  "default_provider": "local_llama",
+  "permissions": {
+    "file_read": true,
+    "file_write": false,
+    "app_launch": true,
+    "package_install": false,
+    "terminal_command": false,
+    "system_settings": false
+  },
+  "confirm_destructive": true
+}
+EOF
+
+# Enable socket (not the service - socket activation)
+mkdir -p /etc/systemd/user/sockets.target.wants
+ln -sf /usr/lib/systemd/user/universal-ai.socket /etc/systemd/user/sockets.target.wants/universal-ai.socket
+
+# Model Download Helper
+cat > /usr/libexec/universal-ai/download-model << 'EOF'
+#!/bin/bash
+# Download a local model for Universal AI
+
+set -euo pipefail
+
+MODEL="${1:-llama-3.2-3b-instruct.Q4_K_M.gguf}"
+MODELS_DIR="${HOME}/.local/share/universal-ai/models"
+mkdir -p "$MODELS_DIR"
+
+echo "Downloading $MODEL to $MODELS_DIR..."
+
+# Hugging Face model URLs (examples)
+case "$MODEL" in
+    llama-3.2-3b-instruct.Q4_K_M.gguf)
+        URL="https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf"
+        ;;
+    phi-3-mini-4k-instruct.Q4_K_M.gguf)
+        URL="https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-Q4_K_M.gguf"
+        ;;
+    gemma-2-2b-it.Q4_K_M.gguf)
+        URL="https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf"
+        ;;
+    *)
+        echo "Unknown model: $MODEL"
+        echo "Available: llama-3.2-3b-instruct.Q4_K_M.gguf, phi-3-mini-4k-instruct.Q4_K_M.gguf, gemma-2-2b-it.Q4_K_M.gguf"
+        exit 1
+        ;;
+esac
+
+wget -q --show-progress -O "$MODELS_DIR/$MODEL" "$URL"
+echo "Model downloaded: $MODELS_DIR/$MODEL"
+EOF
+chmod +x /usr/libexec/universal-ai/download-model
+
+echo "=== Universal AI installation complete ==="
+echo "Note: AI service is socket-activated - zero memory when not in use"

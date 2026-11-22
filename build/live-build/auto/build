@@ -1,0 +1,79 @@
+#!/bin/bash
+# UniversalLite OS - Live Build Auto Script
+# Runs inside the build container/VM
+
+set -euo pipefail
+
+# Configuration
+export LB_BOOTSTRAP_INCLUDE="apt-transport-https ca-certificates curl gnupg"
+export DEBIAN_FRONTEND=noninteractive
+
+# Architecture detection
+ARCH="${ARCH:-$(dpkg --print-architecture)}"
+DISTRIBUTION="${DISTRIBUTION:-trixie}"
+VARIANT="${VARIANT:-balanced}"  # ultra-lite, balanced, performance
+
+echo "=== UniversalLite OS Build ==="
+echo "Architecture: $ARCH"
+echo "Distribution: $DISTRIBUTION"
+echo "Variant: $VARIANT"
+echo "Date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+# Clean previous build
+lb clean --purge 2>/dev/null || true
+
+# Configure live-build
+lb config noauto \
+    --architectures "$ARCH" \
+    --distribution "$DISTRIBUTION" \
+    --debian-installer-distribution "$DISTRIBUTION" \
+    --debian-installer live \
+    --archive-areas "main contrib non-free non-free-firmware" \
+    --apt-indices false \
+    --apt-recommends false \
+    --apt-secure true \
+    --apt-source-archives false \
+    --backports false \
+    --binary-filesystem ext4 \
+    --binary-images iso-hybrid \
+    --bootappend-live "boot=live components quiet splash systemd.show_status=0 rd.udev.log_level=3" \
+    --bootloader "grub-efi,syslinux" \
+    --cache true \
+    --cache-indices false \
+    --cache-packages true \
+    --chroot-filesystem erofs \
+    --chroot-filesystem-options "compressor=zstd,compressor-level=19" \
+    --compression zstd \
+    --debootstrap-options "--variant=minbase --include=systemd,systemd-sysv,ca-certificates" \
+    --firmware-binary true \
+    --firmware-chroot true \
+    --iso-application "UniversalLite OS" \
+    --iso-publisher "UniversalLite OS Project" \
+    --iso-volume "UniversalLite_$(date +%Y%m%d-%H%M)" \
+    --linux-flavours "universallite" \
+    --linux-packages "linux-image linux-headers" \
+    --memtest none \
+    --mode debian \
+    --parent-archive-areas "main contrib non-free non-free-firmware" \
+    --parent-debian-installer-distribution "$DISTRIBUTION" \
+    --parent-distribution "$DISTRIBUTION" \
+    --security true \
+    --source false \
+    --system normal \
+    --uefi-secure-boot enable \
+    --updates true \
+    --variant "$VARIANT" \
+    "${@}"
+
+# Copy variant-specific package lists
+if [ -f "config/package-lists/desktop-${VARIANT}.list.chroot" ]; then
+    cp "config/package-lists/desktop-${VARIANT}.list.chroot" config/package-lists/desktop.list.chroot
+fi
+
+# Copy variant-specific hooks
+if [ -d "config/hooks/${VARIANT}" ]; then
+    cp -r "config/hooks/${VARIANT}/"* config/hooks/normal/ 2>/dev/null || true
+fi
+
+echo "=== Configuration complete ==="
+echo "Run 'lb build' to start building"

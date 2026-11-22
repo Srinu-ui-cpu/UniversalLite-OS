@@ -1,0 +1,148 @@
+# UniversalLite OS - Base System Packages (All Variants)
+# Minimal Debian base + essential system components
+
+# Init & System
+systemd
+systemd-sysv
+libpam-systemd
+dbus
+policykit-1
+
+# Kernel & Hardware
+linux-image-universallite
+linux-headers-universallite
+linux-firmware
+intel-microcode
+amd64-microcode
+raspi-firmware
+raspi-firmware-pi4
+raspi-firmware-pi5
+
+# Network
+systemd-networkd
+systemd-resolved
+network-manager
+network-manager-gnome
+wireless-tools
+wpasupplicant
+bluez
+bluez-tools
+bluetuith
+modemmanager
+usb-modeswitch
+
+# Storage
+udisks2
+udiskie
+gvfs
+gvfs-backends
+ntfs-3g
+exfat-fuse
+exfatprogs
+f2fs-tools
+erofs-utils
+btrfs-progs
+dosfstools
+e2fsprogs
+parted
+gdisk
+
+# Audio
+pipewire
+pipewire-pulse
+pipewire-audio-client-libraries
+wireplumber
+libspa-0.2-bluetooth
+libspa-0.2-jack
+alsa-utils
+pavucontrol
+
+# Input & Graphics
+libinput-bin
+libinput-tools
+xwayland
+mesa-va-drivers
+mesa-vdpau-drivers
+mesa-vulkan-drivers
+vulkan-tools
+libvulkan1
+libegl1
+libgles2
+libgl1
+
+# Security
+apparmor
+apparmor-profiles
+apparmor-utils
+gnupg2
+gnupg-agent
+pinentry-gtk2
+cosign
+minisign
+age
+sops
+
+# Compression & Filesystem
+zstd
+lz4
+xz-utils
+bzip2
+gzip
+tar
+cpio
+squashfs-tools
+erofs-utils
+
+# Utilities
+bash-completion
+command-not-found
+curl
+wget
+ca-certificates
+gnupg
+lsb-release
+file
+less
+nano
+vim-tiny
+htop
+btop
+powertop
+iotop
+nethogs
+ncdu
+tree
+jq
+yq
+unzip
+p7zip-full
+zstd
+lz4
+
+# Development (minimal)
+git
+build-essential
+pkg-config
+python3
+python3-pip
+python3-venv
+rustc
+cargo
+
+# Container & Virtualization
+lxc
+lxc-utils
+lxc-templates
+bridge-utils
+iptables
+nftables
+qemu-system
+qemu-user
+qemu-user-static
+binfmt-support
+
+# Python packages for tools
+python3-yaml
+python3-requests
+python3-toml
+python3-jsonschema

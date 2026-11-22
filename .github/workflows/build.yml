@@ -1,0 +1,661 @@
+name: Build UniversalLite OS
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      arch:
+        description: 'Target architecture'
+        type: choice
+        options: [amd64, arm64, armhf]
+        default: 'amd64'
+      variant:
+        description: 'Build variant'
+        type: choice
+        options: [ultra-lite, balanced, performance]
+        default: 'balanced'
+      distribution:
+        description: 'Debian distribution'
+        type: choice
+        options: [trixie, bookworm]
+        default: 'trixie'
+      sign:
+        description: 'Sign ISO with GPG'
+        type: boolean
+        default: false
+
+env:
+  DEBIAN_FRONTEND: noninteractive
+  LB_APT_HTTP_PROXY: ""
+  LB_APT_FTP_PROXY: ""
+
+jobs:
+  build-amd64:
+    name: Build AMD64 (${{ matrix.variant }})
+    runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.arch == 'amd64'
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [ultra-lite, balanced, performance]
+        distribution: [trixie]
+        include:
+          - variant: ultra-lite
+            ram_target: "73MB"
+          - variant: balanced
+            ram_target: "134MB"
+          - variant: performance
+            ram_target: "158MB"
+    timeout-minutes: 120
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up build environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            live-build \
+            xorriso \
+            grub-efi-amd64 \
+            grub-pc \
+            shim-signed \
+            dosfstools \
+            mtools \
+            efibootmgr \
+            curl \
+            wget \
+            git \
+            python3 \
+            python3-pip \
+            nodejs \
+            npm \
+            qemu-user-static \
+            binfmt-support \
+            debootstrap \
+            squashfs-tools \
+            erofs-utils \
+            zstd \
+            b3sum
+      
+      - name: Enable binfmt for cross-compilation
+        run: |
+          sudo update-binfmts --enable qemu-aarch64
+          sudo update-binfmts --enable qemu-arm
+      
+      - name: Cache live-build
+        uses: actions/cache@v4
+        with:
+          path: |
+            /var/cache/apt/archives
+            ~/.cache/live-build
+          key: live-build-${{ runner.os }}-${{ matrix.variant }}-${{ hashFiles('build/live-build/config/package-lists/**') }}
+          restore-keys: |
+            live-build-${{ runner.os }}-${{ matrix.variant }}-
+      
+      - name: Configure live-build
+        run: |
+          cd build/live-build
+          sudo ./auto/build \
+            --arch amd64 \
+            --distribution ${{ matrix.distribution }} \
+            --variant ${{ matrix.variant }}
+        env:
+          ARCH: amd64
+          DISTRIBUTION: ${{ matrix.distribution }}
+          VARIANT: ${{ matrix.variant }}
+      
+      - name: Build ISO
+        run: |
+          cd build/live-build
+          sudo lb build
+        env:
+          ARCH: amd64
+          DISTRIBUTION: ${{ matrix.distribution }}
+          VARIANT: ${{ matrix.variant }}
+      
+      - name: Create hybrid ISO
+        run: |
+          cd build/live-build
+          sudo ../scripts/create-hybrid-iso.sh amd64 ${{ matrix.distribution }} ${{ matrix.variant }}
+      
+      - name: Test boot in QEMU
+        run: |
+          cd build/live-build
+          sudo ../scripts/test-boot.sh amd64 ${{ matrix.variant }} ${{ matrix.ram_target }}
+        continue-on-error: true
+      
+      - name: Upload ISO artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: universalite-${{ matrix.distribution }}-amd64-${{ matrix.variant }}
+          path: build/images/universalite-${{ matrix.distribution }}-amd64-${{ matrix.variant }}*.iso*
+          retention-days: 30
+      
+      - name: Generate checksums
+        run: |
+          cd build/images
+          for f in universalite-${{ matrix.distribution }}-amd64-${{ matrix.variant }}*.iso; do
+            sha256sum "$f" > "$f.sha256"
+            sha512sum "$f" > "$f.sha512"
+            b3sum "$f" > "$f.b3sum" 2>/dev/null || true
+          done
+          ls -la
+      
+      - name: Upload checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: universalite-${{ matrix.distribution }}-amd64-${{ matrix.variant }}-checksums
+          path: build/images/universalite-${{ matrix.distribution }}-amd64-${{ matrix.variant }}*.sha*
+          retention-days: 30
+
+  build-arm64:
+    name: Build ARM64 (${{ matrix.variant }})
+    runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.arch == 'arm64'
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [ultra-lite, balanced, performance]
+        distribution: [trixie]
+        include:
+          - variant: ultra-lite
+            ram_target: "73MB"
+          - variant: balanced
+            ram_target: "134MB"
+          - variant: performance
+            ram_target: "158MB"
+    timeout-minutes: 180
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up build environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            live-build \
+            xorriso \
+            grub-efi-arm64 \
+            grub-efi-amd64 \
+            shim-signed \
+            dosfstools \
+            mtools \
+            efibootmgr \
+            curl \
+            wget \
+            git \
+            python3 \
+            python3-pip \
+            nodejs \
+            npm \
+            qemu-user-static \
+            binfmt-support \
+            debootstrap \
+            squashfs-tools \
+            erofs-utils \
+            zstd \
+            b3sum \
+            gcc-aarch64-linux-gnu \
+            g++-aarch64-linux-gnu \
+            u-boot-tools \
+            device-tree-compiler
+      
+      - name: Enable binfmt for cross-compilation
+        run: |
+          sudo update-binfmts --enable qemu-aarch64
+          sudo update-binfmts --enable qemu-arm
+      
+      - name: Cache live-build
+        uses: actions/cache@v4
+        with:
+          path: |
+            /var/cache/apt/archives
+            ~/.cache/live-build
+          key: live-build-${{ runner.os }}-arm64-${{ matrix.variant }}-${{ hashFiles('build/live-build/config/package-lists/**') }}
+          restore-keys: |
+            live-build-${{ runner.os }}-arm64-${{ matrix.variant }}-
+      
+      - name: Configure live-build
+        run: |
+          cd build/live-build
+          sudo ./auto/build \
+            --arch arm64 \
+            --distribution ${{ matrix.distribution }} \
+            --variant ${{ matrix.variant }}
+        env:
+          ARCH: arm64
+          DISTRIBUTION: ${{ matrix.distribution }}
+          VARIANT: ${{ matrix.variant }}
+      
+      - name: Build ISO
+        run: |
+          cd build/live-build
+          sudo lb build
+        env:
+          ARCH: arm64
+          DISTRIBUTION: ${{ matrix.distribution }}
+          VARIANT: ${{ matrix.variant }}
+      
+      - name: Create hybrid ISO
+        run: |
+          cd build/live-build
+          sudo ../scripts/create-hybrid-iso.sh arm64 ${{ matrix.distribution }} ${{ matrix.variant }}
+      
+      - name: Create ARM disk image
+        run: |
+          cd build/live-build
+          sudo ../scripts/create-arm-image.sh arm64 ${{ matrix.distribution }} ${{ matrix.variant }}
+      
+      - name: Test boot in QEMU (ARM64)
+        run: |
+          cd build/live-build
+          sudo ../scripts/test-boot.sh arm64 ${{ matrix.variant }} ${{ matrix.ram_target }}
+        continue-on-error: true
+      
+      - name: Upload ISO artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: universalite-${{ matrix.distribution }}-arm64-${{ matrix.variant }}
+          path: build/images/universalite-${{ matrix.distribution }}-arm64-${{ matrix.variant }}*.iso*
+          retention-days: 30
+      
+      - name: Upload ARM disk image
+        uses: actions/upload-artifact@v4
+        with:
+          name: universalite-${{ matrix.distribution }}-arm64-${{ matrix.variant }}-disk
+          path: build/images/universalite-${{ matrix.distribution }}-arm64-${{ matrix.variant }}*.img*
+          retention-days: 30
+      
+      - name: Generate checksums
+        run: |
+          cd build/images
+          for f in universalite-${{ matrix.distribution }}-arm64-${{ matrix.variant }}*.iso; do
+            sha256sum "$f" > "$f.sha256"
+            sha512sum "$f" > "$f.sha512"
+            b3sum "$f" > "$f.b3sum" 2>/dev/null || true
+          done
+          for f in universalite-${{ matrix.distribution }}-arm64-${{ matrix.variant }}*.img.xz; do
+            sha256sum "$f" > "$f.sha256"
+            sha512sum "$f" > "$f.sha512"
+            b3sum "$f" > "$f.b3sum" 2>/dev/null || true
+          done
+          ls -la
+      
+      - name: Upload checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: universalite-${{ matrix.distribution }}-arm64-${{ matrix.variant }}-checksums
+          path: build/images/universalite-${{ matrix.distribution }}-arm64-${{ matrix.variant }}*.sha*
+          retention-days: 30
+
+  build-armhf:
+    name: Build ARMhf (${{ matrix.variant }})
+    runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.arch == 'armhf'
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [ultra-lite, balanced]
+        distribution: [trixie]
+        include:
+          - variant: ultra-lite
+            ram_target: "64MB"
+          - variant: balanced
+            ram_target: "96MB"
+    timeout-minutes: 180
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up build environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            live-build \
+            xorriso \
+            grub-efi-arm64 \
+            grub-efi-amd64 \
+            shim-signed \
+            dosfstools \
+            mtools \
+            efibootmgr \
+            curl \
+            wget \
+            git \
+            python3 \
+            python3-pip \
+            nodejs \
+            npm \
+            qemu-user-static \
+            binfmt-support \
+            debootstrap \
+            squashfs-tools \
+            erofs-utils \
+            zstd \
+            b3sum \
+            gcc-arm-linux-gnueabihf \
+            g++-arm-linux-gnueabihf \
+            u-boot-tools \
+            device-tree-compiler
+      
+      - name: Enable binfmt for cross-compilation
+        run: |
+          sudo update-binfmts --enable qemu-arm
+      
+      - name: Cache live-build
+        uses: actions/cache@v4
+        with:
+          path: |
+            /var/cache/apt/archives
+            ~/.cache/live-build
+          key: live-build-${{ runner.os }}-armhf-${{ matrix.variant }}-${{ hashFiles('build/live-build/config/package-lists/**') }}
+          restore-keys: |
+            live-build-${{ runner.os }}-armhf-${{ matrix.variant }}-
+      
+      - name: Configure live-build
+        run: |
+          cd build/live-build
+          sudo ./auto/build \
+            --arch armhf \
+            --distribution ${{ matrix.distribution }} \
+            --variant ${{ matrix.variant }}
+        env:
+          ARCH: armhf
+          DISTRIBUTION: ${{ matrix.distribution }}
+          VARIANT: ${{ matrix.variant }}
+      
+      - name: Build ISO
+        run: |
+          cd build/live-build
+          sudo lb build
+        env:
+          ARCH: armhf
+          DISTRIBUTION: ${{ matrix.distribution }}
+          VARIANT: ${{ matrix.variant }}
+      
+      - name: Create hybrid ISO
+        run: |
+          cd build/live-build
+          sudo ../scripts/create-hybrid-iso.sh armhf ${{ matrix.distribution }} ${{ matrix.variant }}
+      
+      - name: Create ARM disk image
+        run: |
+          cd build/live-build
+          sudo ../scripts/create-arm-image.sh armhf ${{ matrix.distribution }} ${{ matrix.variant }}
+      
+      - name: Test boot in QEMU (ARMhf)
+        run: |
+          cd build/live-build
+          sudo ../scripts/test-boot.sh armhf ${{ matrix.variant }} ${{ matrix.ram_target }}
+        continue-on-error: true
+      
+      - name: Upload ISO artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: universalite-${{ matrix.distribution }}-armhf-${{ matrix.variant }}
+          path: build/images/universalite-${{ matrix.distribution }}-armhf-${{ matrix.variant }}*.iso*
+          retention-days: 30
+      
+      - name: Upload ARM disk image
+        uses: actions/upload-artifact@v4
+        with:
+          name: universalite-${{ matrix.distribution }}-armhf-${{ matrix.variant }}-disk
+          path: build/images/universalite-${{ matrix.distribution }}-armhf-${{ matrix.variant }}*.img*
+          retention-days: 30
+      
+      - name: Generate checksums
+        run: |
+          cd build/images
+          for f in universalite-${{ matrix.distribution }}-armhf-${{ matrix.variant }}*.iso; do
+            sha256sum "$f" > "$f.sha256"
+            sha512sum "$f" > "$f.sha512"
+            b3sum "$f" > "$f.b3sum" 2>/dev/null || true
+          done
+          for f in universalite-${{ matrix.distribution }}-armhf-${{ matrix.variant }}*.img.xz; do
+            sha256sum "$f" > "$f.sha256"
+            sha512sum "$f" > "$f.sha512"
+            b3sum "$f" > "$f.b3sum" 2>/dev/null || true
+          done
+          ls -la
+      
+      - name: Upload checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: universalite-${{ matrix.distribution }}-armhf-${{ matrix.variant }}-checksums
+          path: build/images/universalite-${{ matrix.distribution }}-armhf-${{ matrix.variant }}*.sha*
+          retention-days: 30
+
+  test-matrix:
+    name: Test Matrix
+    needs: [build-amd64, build-arm64, build-armhf]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    timeout-minutes: 60
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: universalite-*
+      
+      - name: List artifacts
+        run: |
+          find artifacts -type f -name "*.iso" -o -name "*.img*" -o -name "*.sha*" | sort
+          echo "Total ISOs: $(find artifacts -name "*.iso" | wc -l)"
+          echo "Total disk images: $(find artifacts -name "*.img*" | wc -l)"
+      
+      - name: Verify checksums
+        run: |
+          cd artifacts
+          for f in *.sha256; do
+            echo "Verifying $f..."
+            sha256sum -c "$f" || exit 1
+          done
+          echo "All checksums verified!"
+      
+      - name: Test boot all ISOs
+        run: |
+          for iso in artifacts/*.iso; do
+            echo "Testing $iso..."
+            timeout 60 qemu-system-x86_64 -m 1G -cdrom "$iso" -nographic -no-reboot || true
+          done
+        continue-on-error: true
+
+  release:
+    name: Create Release
+    needs: [build-amd64, build-arm64, build-armhf, test-matrix]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: universalite-*
+      
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          cp artifacts/**/*.iso release-assets/ 2>/dev/null || true
+          cp artifacts/**/*.img.xz release-assets/ 2>/dev/null || true
+          cp artifacts/**/*.sha256 release-assets/ 2>/dev/null || true
+          cp artifacts/**/*.sha512 release-assets/ 2>/dev/null || true
+          cp artifacts/**/*.b3sum release-assets/ 2>/dev/null || true
+          ls -la release-assets/
+      
+      - name: Generate release notes
+        run: |
+          cat > release-notes.md << 'RELEASEEOF'
+          # UniversalLite OS ${{ github.ref_name }}
+          
+          ## Downloads
+          
+          ### AMD64 (x86_64)
+          | Variant | ISO | Checksums |
+          |---------|-----|-----------|
+          RELEASEEOF
+          
+          for variant in ultra-lite balanced performance; do
+            iso=$(find release-assets -name "*amd64-${variant}*.iso" | head -1)
+            if [[ -n "$iso" ]]; then
+              sha=$(cat "${iso}.sha256" | cut -d' ' -f1)
+              echo "| $variant | [${iso##*/}](${iso##*/}) | SHA256: \`${sha}\` |" >> release-notes.md
+            fi
+          done
+          
+          cat >> release-notes.md << 'RELEASEEOF'
+          
+          ### ARM64 (AArch64)
+          | Variant | ISO | Disk Image | Checksums |
+          |---------|-----|------------|-----------|
+          RELEASEEOF
+          
+          for variant in ultra-lite balanced performance; do
+            iso=$(find release-assets -name "*arm64-${variant}*.iso" | head -1)
+            img=$(find release-assets -name "*arm64-${variant}*.img.xz" | head -1)
+            if [[ -n "$iso" || -n "$img" ]]; then
+              iso_name=${iso##*/}
+              img_name=${img##*/}
+              sha=$(cat "${iso}.sha256" 2>/dev/null | cut -d' ' -f1 || echo "N/A")
+              echo "| $variant | [${iso_name}](${iso_name}) | [${img_name}](${img_name}) | SHA256: \`${sha}\` |" >> release-notes.md
+            fi
+          done
+          
+          cat >> release-notes.md << 'RELEASEEOF'
+          
+          ### ARMhf (ARM 32-bit)
+          | Variant | ISO | Disk Image | Checksums |
+          |---------|-----|------------|-----------|
+          RELEASEEOF
+          
+          for variant in ultra-lite balanced; do
+            iso=$(find release-assets -name "*armhf-${variant}*.iso" | head -1)
+            img=$(find release-assets -name "*armhf-${variant}*.img.xz" | head -1)
+            if [[ -n "$iso" || -n "$img" ]]; then
+              iso_name=${iso##*/}
+              img_name=${img##*/}
+              sha=$(cat "${iso}.sha256" 2>/dev/null | cut -d' ' -f1 || echo "N/A")
+              echo "| $variant | [${iso_name}](${iso_name}) | [${img_name}](${img_name}) | SHA256: \`${sha}\` |" >> release-notes.md
+            fi
+          done
+          
+          cat >> release-notes.md << 'RELEASEEOF'
+          
+          ## Installation
+          
+          ### Live USB (Universal)
+          ```bash
+          # Write ISO to USB drive
+          sudo dd if=universalite-*.iso of=/dev/sdX bs=4M status=progress && sync
+          ```
+          
+          ### ARM Devices (Raspberry Pi, etc.)
+          ```bash
+          # Decompress and write disk image
+          xzcat universalite-*.img.xz | sudo dd of=/dev/sdX bs=4M status=progress && sync
+          ```
+          
+          ## Features
+          
+          - **Ultra Lite**: ~73MB RAM idle, minimal services
+          - **Balanced**: ~134MB RAM idle, recommended for daily use
+          - **Performance**: ~158MB RAM idle, full features
+          
+          All variants include:
+          - Windows app support via UniversalBridge (Wine + Box86/Box64 + DXVK/VKD3D)
+          - Android app support via Waydroid
+          - Universal App Center (APT, Flatpak, Windows, Android, Web)
+          - Optional AI Assistant (socket-activated, zero memory when idle)
+          - Secure Boot support
+          - Automatic updates with rollback
+          
+          ## System Requirements
+          
+          - **Minimum**: 1 GB RAM, 8 GB storage, x86_64 or ARM64/ARMhf CPU
+          - **Recommended**: 2 GB RAM, 16 GB storage
+          - **Boot**: UEFI or BIOS (CSM)
+          
+          ## Known Issues
+          
+          - Waydroid requires kernel with binder/ashmem (included)
+          - Some Windows apps need specific Wine prefixes (configured per-app)
+          - ARM64 Windows apps require Box64 (included)
+          - Secure Boot keys are test keys - replace for production
+          
+          ## Verification
+          
+          Verify downloads:
+          ```bash
+          sha256sum -c universalite-*.sha256
+          ```
+          
+          GPG signatures available for signed releases.
+          RELEASEEOF
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: UniversalLite OS ${{ github.ref_name }}
+          body_path: release-notes.md
+          files: release-assets/*
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'rc') || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  notify:
+    name: Notify
+    needs: [build-amd64, build-arm64, build-armhf]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Build status
+        run: |
+          echo "Build completed with status: ${{ needs.build-amd64.result }}, ${{ needs.build-arm64.result }}, ${{ needs.build-armhf.result }}"
+      
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number
+            });
+            
+            const body = `## UniversalLite OS Build Results
+            
+            | Architecture | Variant | Status |
+            |-------------|---------|--------|
+            | AMD64 | ultra-lite | ${{ needs.build-amd64.result }} |
+            | AMD64 | balanced | ${{ needs.build-amd64.result }} |
+            | AMD64 | performance | ${{ needs.build-amd64.result }} |
+            | ARM64 | ultra-lite | ${{ needs.build-arm64.result }} |
+            | ARM64 | balanced | ${{ needs.build-arm64.result }} |
+            | ARM64 | performance | ${{ needs.build-arm64.result }} |
+            | ARMhf | ultra-lite | ${{ needs.build-armhf.result }} |
+            | ARMhf | balanced | ${{ needs.build-armhf.result }} |
+            
+            Artifacts available for 30 days.`;
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body
+            });

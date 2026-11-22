@@ -1,0 +1,72 @@
+#!/bin/bash
+# Hook: 01-install-kernel
+# Install custom kernel with Waydroid support (binder, ashmem, zram)
+
+set -euo pipefail
+
+echo "=== Installing UniversalLite Kernel ==="
+
+# Kernel package name varies by arch
+case "$LB_ARCHITECTURES" in
+    amd64)
+        KERNEL_PKG="linux-image-amd64"
+        KERNEL_HEADERS="linux-headers-amd64"
+        ;;
+    arm64)
+        KERNEL_PKG="linux-image-arm64"
+        KERNEL_HEADERS="linux-headers-arm64"
+        ;;
+    armhf)
+        KERNEL_PKG="linux-image-armmp"
+        KERNEL_HEADERS="linux-headers-armmp"
+        ;;
+    *)
+        echo "Unknown architecture: $LB_ARCHITECTURES"
+        exit 1
+        ;;
+esac
+
+# Install kernel and headers
+apt-get update
+apt-get install -y --no-install-recommends \
+    "$KERNEL_PKG" \
+    "$KERNEL_HEADERS" \
+    linux-firmware \
+    intel-microcode \
+    amd64-microcode \
+    raspi-firmware \
+    raspi-firmware-pi4 \
+    raspi-firmware-pi5
+
+# Verify kernel config has required modules
+KERNEL_VERSION=$(ls /boot/vmlinuz-* | head -1 | sed 's|/boot/vmlinuz-||')
+echo "Kernel version: $KERNEL_VERSION"
+
+# Check for required modules
+for MODULE in binder ashmem zram zsmalloc; do
+    if ! grep -q "CONFIG_${MODULE^^}=[ym]" "/boot/config-$KERNEL_VERSION" 2>/dev/null; then
+        echo "WARNING: Kernel missing $MODULE support"
+    fi
+done
+
+# Create initramfs with required modules
+cat > /etc/initramfs-tools/modules.d/universallite << 'EOF'
+# UniversalLite required modules
+binder
+ashmem
+zram
+zsmalloc
+overlay
+squashfs
+erofs
+f2fs
+EOF
+
+update-initramfs -u -k all
+
+# Set default kernel command line for performance
+cat > /etc/default/grub.d/universallite.cfg << 'EOF'
+GRUB_CMDLINE_LINUX_DEFAULT="quiet splash systemd.show_status=0 rd.udev.log_level=3 zswap.enabled=1 zswap.compressor=zstd zswap.max_pool_percent=20 zswap.zpool=z3fold"
+EOF
+
+echo "=== Kernel installation complete ==="

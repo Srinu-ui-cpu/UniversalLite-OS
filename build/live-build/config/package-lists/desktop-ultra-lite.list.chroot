@@ -1,0 +1,54 @@
+# UniversalLite OS - Desktop Packages (Ultra Lite Variant)
+# Minimal desktop - LabWC only, no background services
+
+# Wayland Compositor & Shell
+labwc
+waybar
+mako-notifier
+swaylock-effects
+swww
+wl-clipboard
+wlr-randr
+wlr-ctl
+xdg-desktop-portal-wlr
+xdg-desktop-portal-gtk
+
+# Terminal & File Manager
+foot
+thunar
+thunar-archive-plugin
+thunar-volman
+tumbler
+ffmpegthumbnailer
+
+# Launcher & Menu
+wofi
+bemenu
+
+# Settings & System Tools
+grim
+slurp
+swappy
+wl-gammactl
+brightnessctl
+playerctl
+pamixer
+pulsemixer
+
+# Fonts & Themes
+fonts-dejavu
+fonts-liberation
+fonts-noto
+fonts-noto-color-emoji
+adwaita-icon-theme
+gtk4-nocsd
+
+# Authentication
+polkit-kde-agent-1
+# OR: lxqt-policykit (lighter)
+
+# Wallpapers
+universallite-wallpapers
+
+# Ultra Lite: NO PipeWire, NO BlueZ, NO NetworkManager (use systemd-networkd)
+# NO bluetooth, NO automatic mounting, NO notifications daemon (use mako only)

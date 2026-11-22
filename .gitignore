@@ -1,0 +1,105 @@
+# UniversalLite OS - Git Ignore
+
+# Build outputs
+build/live-build/chroot/
+build/live-build/binary/
+build/live-build/cache/
+build/live-build/*.log
+build/images/*.iso
+build/images/*.img*
+build/images/*.sha256
+build/images/*.sha512
+build/images/*.b3sum
+build/images/*.asc
+
+# Live build
+build/live-build/auto/*.deb
+build/live-build/config/bootstrap
+build/live-build/config/chroot
+build/live-build/config/common
+build/live-build/config/includes.chroot
+build/live-build/config/includes.binary
+build/live-build/config/includes.source
+build/live-build/config/includes.installer
+
+# OS artifacts
+*.iso
+*.img
+*.img.xz
+*.vdi
+*.vmdk
+*.qcow2
+
+# Package cache
+/var/cache/apt/archives/
+*.deb
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.venv/
+venv/
+env/
+ENV/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE/Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+.tmp/
+temp/
+
+# Secrets
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+.env
+.env.local
+.env.*.local
+
+# GPG
+*.gpg
+*.asc
+secring.gpg
+pubring.gpg
+
+# Large files
+*.tar.gz
+*.tar.xz
+*.zip
+*.7z
+
+# Test outputs
+test-results/
+coverage/
+*.xml
+
+# OS specific
+*.orig
+*.rej

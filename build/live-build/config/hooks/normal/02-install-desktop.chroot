@@ -1,0 +1,624 @@
+#!/bin/bash
+# Hook: 02-install-desktop
+# Configure LabWC, Waybar, Launcher, and desktop environment
+
+set -euo pipefail
+
+echo "=== Installing UniversalLite Desktop ==="
+
+# Create universalite user (live user)
+if ! id "universalite" &>/dev/null; then
+    useradd -m -s /bin/bash -G sudo,audio,video,plugdev,netdev,lpadmin,scanner,bluetooth,input,kvm,render universalite
+    echo "universalite:universalite" | chpasswd
+    echo "universalite ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/universalite
+fi
+
+# Root password (for recovery)
+echo "root:universallite" | chpasswd
+
+# LabWC Configuration
+mkdir -p /etc/xdg/labwc
+cat > /etc/xdg/labwc/rc.xml << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<openbox_config xmlns="http://openbox.org/3.4/rc" xmlns:xi="http://www.w3.org/2001/XInclude">
+  <resistance>
+    <strength>10</strength>
+    <screen_edge_strength>20</screen_edge_strength>
+  </resistance>
+  <focus>
+    <focusNew>yes</focusNew>
+    <followMouse>no</followMouse>
+    <focusLast>yes</focusLast>
+    <underMouse>no</underMouse>
+    <focusDelay>100</focusDelay>
+    <raiseOnFocus>yes</raiseOnFocus>
+  </focus>
+  <placement>
+    <policy>Smart</policy>
+    <center>yes</center>
+    <monitor>Primary</monitor>
+    <primaryMonitor>1</primaryMonitor>
+  </placement>
+  <theme>
+    <name>Adwaita-dark</name>
+    <titleLayout>NLIMC</titleLayout>
+    <keepBorder>yes</keepBorder>
+    <animateIconify>yes</animateIconify>
+    <font place="ActiveWindow">
+      <name>Cantarell</name>
+      <size>11</size>
+      <weight>Bold</weight>
+      <slant>Normal</slant>
+    </font>
+    <font place="InactiveWindow">
+      <name>Cantarell</name>
+      <size>11</size>
+      <weight>Normal</weight>
+      <slant>Normal</slant>
+    </font>
+    <font place="MenuHeader">
+      <name>Cantarell</name>
+      <size>11</size>
+      <weight>Bold</weight>
+      <slant>Normal</slant>
+    </font>
+    <font place="MenuItem">
+      <name>Cantarell</name>
+      <size>11</size>
+      <weight>Normal</weight>
+      <slant>Normal</slant>
+    </font>
+    <font place="ActiveOnScreenDisplay">
+      <name>Cantarell</name>
+      <size>11</size>
+      <weight>Bold</weight>
+      <slant>Normal</slant>
+    </font>
+    <font place="InactiveOnScreenDisplay">
+      <name>Cantarell</name>
+      <size>11</size>
+      <weight>Normal</weight>
+      <slant>Normal</slant>
+    </font>
+  </theme>
+  <desktops>
+    <number>4</number>
+    <firstdesk>1</firstdesk>
+    <names>
+      <name>Desktop 1</name>
+      <name>Desktop 2</name>
+      <name>Desktop 3</name>
+      <name>Desktop 4</name>
+    </names>
+    <popupTime>500</popupTime>
+  </desktops>
+  <resize>
+    <drawContents>yes</drawContents>
+    <popupShow>Nonpixel</popupShow>
+    <popupPosition>Center</popupPosition>
+    <popupFixedPosition>
+      <x>10</x>
+      <y>10</y>
+    </popupFixedPosition>
+  </resize>
+  <margins>
+    <top>0</top>
+    <bottom>0</bottom>
+    <left>0</left>
+    <right>0</right>
+  </margins>
+  <dock>
+    <position>Bottom</position>
+    <floatingX>0</floatingX>
+    <floatingY>0</floatingY>
+    <noStrut>no</noStrut>
+    <stacking>Above</stacking>
+    <direction>Horizontal</direction>
+    <autoHide>no</autoHide>
+    <hideDelay>300</hideDelay>
+    <showDelay>300</showDelay>
+    <moveButton>Middle</moveButton>
+  </dock>
+  <keyboard>
+    <chainQuitKey>C-g</chainQuitKey>
+    <keybind key="W-Return">
+      <action name="Execute">
+        <command>foot</command>
+      </action>
+    </keybind>
+    <keybind key="W-Space">
+      <action name="Execute">
+        <command>wofi --show drun</command>
+      </action>
+    </keybind>
+    <keybind key="W-S-c">
+      <action name="Execute">
+        <command>wofi --show drun</command>
+      </action>
+    </keybind>
+    <keybind key="W-q">
+      <action name="Close"/>
+    </keybind>
+    <keybind key="W-S-q">
+      <action name="Execute">
+        <command>swaylock</command>
+      </action>
+    </keybind>
+    <keybind key="W-1">
+      <action name="Desktop">
+        <desktop>1</desktop>
+      </action>
+    </keybind>
+    <keybind key="W-2">
+      <action name="Desktop">
+        <desktop>2</desktop>
+      </action>
+    </keybind>
+    <keybind key="W-3">
+      <action name="Desktop">
+        <desktop>3</desktop>
+      </action>
+    </keybind>
+    <keybind key="W-4">
+      <action name="Desktop">
+        <desktop>4</desktop>
+      </action>
+    </keybind>
+    <keybind key="W-S-1">
+      <action name="SendToDesktop">
+        <desktop>1</desktop>
+        <follow>yes</follow>
+      </action>
+    </keybind>
+    <keybind key="W-S-2">
+      <action name="SendToDesktop">
+        <desktop>2</desktop>
+        <follow>yes</follow>
+      </action>
+    </keybind>
+    <keybind key="W-S-3">
+      <action name="SendToDesktop">
+        <desktop>3</desktop>
+        <follow>yes</follow>
+      </action>
+    </keybind>
+    <keybind key="W-S-4">
+      <action name="SendToDesktop">
+        <desktop>4</desktop>
+        <follow>yes</follow>
+      </action>
+    </keybind>
+    <keybind key="Print">
+      <action name="Execute">
+        <command>grim - | wl-copy</command>
+      </action>
+    </keybind>
+    <keybind key="S-Print">
+      <action name="Execute">
+        <command>grim -g "$(slurp)" - | wl-copy</command>
+      </action>
+    </keybind>
+    <keybind key="W-Print">
+      <action name="Execute">
+        <command>swappy -f -</command>
+      </action>
+    </keybind>
+    <keybind key="XF86AudioRaiseVolume">
+      <action name="Execute">
+        <command>pamixer -i 5</command>
+      </action>
+    </keybind>
+    <keybind key="XF86AudioLowerVolume">
+      <action name="Execute">
+        <command>pamixer -d 5</command>
+      </action>
+    </keybind>
+    <keybind key="XF86AudioMute">
+      <action name="Execute">
+        <command>pamixer -t</command>
+      </action>
+    </keybind>
+    <keybind key="XF86MonBrightnessUp">
+      <action name="Execute">
+        <command>brightnessctl s +5%</command>
+      </action>
+    </keybind>
+    <keybind key="XF86MonBrightnessDown">
+      <action name="Execute">
+        <command>brightnessctl s 5%-</command>
+      </action>
+    </keybind>
+  </keyboard>
+  <mouse>
+    <dragThreshold>8</dragThreshold>
+    <doubleClickTime>200</doubleClickTime>
+    <screenEdgeWarpTime>0</screenEdgeWarpTime>
+    <context name="Frame">
+      <mousebind button="W-Left" action="Press">
+        <action name="Focus"/>
+        <action name="Raise"/>
+      </mousebind>
+      <mousebind button="W-Left" action="Drag">
+        <action name="Move"/>
+      </mousebind>
+      <mousebind button="W-Right" action="Drag">
+        <action name="Resize"/>
+      </mousebind>
+      <mousebind button="W-Middle" action="Press">
+        <action name="Lower"/>
+        <action name="FocusToBottom"/>
+        <action name="Unfocus"/>
+      </mousebind>
+      <mousebind button="W-Up" action="Click">
+        <action name="Desktop">
+          <desktop>previous</desktop>
+        </action>
+      </mousebind>
+      <mousebind button="W-Down" action="Click">
+        <action name="Desktop">
+          <desktop>next</desktop>
+        </action>
+      </mousebind>
+    </context>
+  </mouse>
+  <margins>
+    <top>0</top>
+    <bottom>0</bottom>
+    <left>0</left>
+    <right>0</right>
+  </margins>
+</openbox_config>
+EOF
+
+# LabWC Environment
+cat > /etc/xdg/labwc/environment << 'EOF'
+# UniversalLite LabWC Environment
+export XDG_CURRENT_DESKTOP=labwc
+export XDG_SESSION_DESKTOP=labwc
+export XDG_SESSION_TYPE=wayland
+export GDK_BACKEND=wayland
+export QT_QPA_PLATFORM=wayland
+export SDL_VIDEODRIVER=wayland
+export CLUTTER_BACKEND=wayland
+export ECORE_EVAS_ENGINE=wayland_egl
+export ELM_DISPLAY=wl
+export MOZ_ENABLE_WAYLAND=1
+export FIREFOX_WAYLAND=1
+export WAYLAND_DISPLAY=wayland-0
+EOF
+
+# Waybar Configuration
+mkdir -p /etc/xdg/waybar
+cat > /etc/xdg/waybar/config.jsonc << 'EOF'
+{
+    "layer": "top",
+    "position": "top",
+    "height": 36,
+    "spacing": 4,
+    "modules-left": ["workspaces", "universallite-launcher"],
+    "modules-center": ["clock"],
+    "modules-right": ["pulseaudio", "network", "bluetooth", "battery", "tray", "power"],
+    "workspaces": {
+        "format": "{icon}",
+        "format-icons": {
+            "1": "1",
+            "2": "2",
+            "3": "3",
+            "4": "4",
+            "active": "●",
+            "inactive": "○",
+            "urgent": "◎"
+        },
+        "on-click": "activate",
+        "persistent-workspaces": {
+            "1": {"name": "Web"},
+            "2": {"name": "Code"},
+            "3": {"name": "Apps"},
+            "4": {"name": "System"}
+        }
+    },
+    "universallite-launcher": {
+        "format": "{icon}",
+        "icon": "🚀",
+        "on-click": "universallite-launcher",
+        "tooltip": true
+    },
+    "clock": {
+        "format": "{:%H:%M}",
+        "format-alt": "{:%Y-%m-%d %H:%M:%S}",
+        "tooltip-format": "{:%A, %B %d, %Y}",
+        "on-click": "toggle-format"
+    },
+    "pulseaudio": {
+        "format": "{icon} {volume}%",
+        "format-bluetooth": "{icon} {volume}% 🎧",
+        "format-muted": "🔇",
+        "format-source": "🎤 {volume}%",
+        "on-click": "pavucontrol",
+        "scroll-step": 5
+    },
+    "network": {
+        "format-wifi": "📶 {essid} ({signalStrength}%)",
+        "format-ethernet": "🔗 Connected",
+        "format-linked": "🔗 {interface} (No carrier)",
+        "format-disconnected": "❌ Disconnected",
+        "format-alt": "{ipaddr}/{cidr}",
+        "on-click": "nmtui",
+        "tooltip": true
+    },
+    "bluetooth": {
+        "format": "🔵 {connectedDevices}",
+        "format-disabled": "⚫",
+        "on-click": "blueman-manager",
+        "tooltip": true
+    },
+    "battery": {
+        "format": "{icon} {capacity}%",
+        "format-charging": "⚡ {capacity}%",
+        "format-plugged": "🔌 {capacity}%",
+        "format-alt": "{time} {icon}",
+        "threshold": 20,
+        "on-click": "power-profiles-daemon"
+    },
+    "tray": {
+        "icon-size": 16,
+        "spacing": 4
+    },
+    "power": {
+        "format": "⏻",
+        "on-click": "universallite-power-menu",
+        "tooltip": true
+    }
+}
+EOF
+
+cat > /etc/xdg/waybar/style.css << 'EOF'
+/* UniversalLite Waybar Theme */
+* {
+    border: none;
+    border-radius: 0;
+    font-family: "JetBrains Mono", "Cantarell", sans-serif;
+    font-size: 13px;
+    min-height: 32px;
+}
+
+window#waybar {
+    background: rgba(30, 30, 46, 0.95);
+    color: #cdd6f4;
+    border-bottom: 1px solid #313244;
+}
+
+#workspaces {
+    margin-left: 8px;
+    margin-right: 8px;
+}
+
+#workspaces button {
+    padding: 0 8px;
+    color: #6c7086;
+    transition: all 0.2s;
+}
+
+#workspaces button.active {
+    color: #f5c2e7;
+    background: rgba(245, 194, 231, 0.1);
+    border-radius: 8px;
+}
+
+#workspaces button:hover {
+    background: rgba(245, 194, 231, 0.2);
+    border-radius: 8px;
+}
+
+#clock {
+    padding: 0 12px;
+    color: #f9e2af;
+}
+
+#pulseaudio, #network, #bluetooth, #battery, #tray, #power {
+    padding: 0 10px;
+    margin-right: 4px;
+}
+
+#pulseaudio { color: #a6e3a1; }
+#network { color: #89b4fa; }
+#bluetooth { color: #fab387; }
+#battery { color: #f9e2af; }
+#power { color: #f38ba8; margin-right: 12px; }
+
+#tray menu { background: #1e1e2e; border: 1px solid #313244; }
+#tray menuitem { padding: 4px 12px; }
+
+#universallite-launcher {
+    margin-left: 12px;
+    padding: 0 16px;
+    background: linear-gradient(90deg, #cba6f7, #f5c2e7);
+    color: #1e1e2e;
+    font-weight: bold;
+    border-radius: 16px;
+    transition: all 0.2s;
+}
+
+#universallite-launcher:hover {
+    background: linear-gradient(90deg, #f5c2e7, #cba6f7);
+    transform: scale(1.05);
+}
+EOF
+
+# Mako Configuration
+mkdir -p /etc/mako
+cat > /etc/mako/config << 'EOF'
+[general]
+anchor=top-right
+margin=16,48
+max-visible=5
+layer=overlay
+width=400
+height=100
+format=<b>{summary}</b>\n{body}
+actions=1
+ignore-timeout=0
+font=JetBrains Mono 11
+
+[urgency=low]
+background=#1e1e2e
+border=#313244
+default-timeout=3
+
+[urgency=normal]
+background=#1e1e2e
+border=#89b4fa
+default-timeout=5
+
+[urgency=critical]
+background=#1e1e2e
+border=#f38ba8
+default-timeout=0
+EOF
+
+# Swaylock Configuration
+mkdir -p /etc/swaylock
+cat > /etc/swaylock/config << 'EOF'
+[general]
+daemonize=true
+indicator-radius=120
+indicator-thickness=10
+effect-blur=7x5
+effect-vignette=0.5:0.5
+effect-pixelate=0
+ring-color=313244
+key-hl-color=cba6f7
+line-color=00000000
+inside-color=1e1e2e88
+inside-clear-color=1e1e2e88
+inside-wrong-color=f38ba888
+inside-verifying-color=89b4fa88
+text-color=cdd6f4
+text-clear-color=cdd6f4
+text-wrong-color=f38ba8
+text-verifying-color=89b4fa
+font=JetBrains Mono
+EOF
+
+# swww (wallpaper) - default wallpaper will be set by universalite-wallpapers package
+mkdir -p /usr/share/backgrounds/universallite
+
+# Foot Terminal Configuration
+mkdir -p /etc/xdg/foot
+cat > /etc/xdg/foot/foot.ini << 'EOF'
+[main]
+font=JetBrains Mono:size=11
+bold-font=JetBrains Mono:weight=bold:size=11
+italic-font=JetBrains Mono:slant=italic:size=11
+bold-italic-font=JetBrains Mono:weight=bold:slant=italic:size=11
+term=xterm-256color
+title=Foot
+app-id=foot
+working-directory=~
+scrollback-lines=10000
+mouse-hide-while-typing=true
+
+[colors]
+foreground=cdd6f4
+background=1e1e2e
+cursor=cba6f7
+selection=313244
+regular0=1e1e2e
+regular1=f38ba8
+regular2=a6e3a1
+regular3=f9e2af
+regular4=89b4fa
+regular5=cba6f7
+regular6=94e2d5
+regular7=bac2de
+bright0=6c7086
+bright1=f38ba8
+bright2=a6e3a1
+bright3=f9e2af
+bright4=89b4fa
+bright5=cba6f7
+bright6=94e2d5
+bright7=a6adc8
+
+[cursor]
+style=block
+blink=on
+
+[mouse]
+hide-when-typing=true
+EOF
+
+# GTK Settings (for GTK4 apps)
+mkdir -p /etc/gtk-4.0
+cat > /etc/gtk-4.0/settings.ini << 'EOF'
+[Settings]
+gtk-theme-name=Adwaita-dark
+gtk-icon-theme-name=adwaita
+gtk-font-name=Cantarell 11
+gtk-cursor-theme-name=Adwaita
+gtk-cursor-theme-size=24
+gtk-toolbar-style=GTK_TOOLBAR_BOTH
+gtk-toolbar-icon-size=GTK_ICON_SIZE_LARGE_TOOLBAR
+gtk-button-images=1
+gtk-menu-images=1
+gtk-enable-event-sounds=1
+gtk-enable-input-feedback-sounds=1
+gtk-xft-antialias=1
+gtk-xft-hinting=1
+gtk-xft-hintstyle=hintslight
+gtk-xft-rgba=rgb
+gtk-application-prefer-dark-theme=1
+EOF
+
+# Desktop Entry for UniversalLite Session
+mkdir -p /usr/share/wayland-sessions
+cat > /usr/share/wayland-sessions/universallite.desktop << 'EOF'
+[Desktop Entry]
+Name=UniversalLite
+Comment=Ultra-lightweight Wayland Desktop
+Exec=labwc
+Type=Application
+DesktopNames=UniversalLite
+Keywords=Wayland;Compositor;Lightweight;
+EOF
+
+# Autostart Applications
+mkdir -p /etc/xdg/autostart
+cat > /etc/xdg/autostart/waybar.desktop << 'EOF'
+[Desktop Entry]
+Type=Application
+Name=Waybar
+Exec=waybar
+OnlyShowIn=UniversalLite;
+X-GNOME-Autostart-enabled=true
+EOF
+
+cat > /etc/xdg/autostart/mako.desktop << 'EOF'
+[Desktop Entry]
+Type=Application
+Name=Mako Notifications
+Exec=mako
+OnlyShowIn=UniversalLite;
+X-GNOME-Autostart-enabled=true
+EOF
+
+cat > /etc/xdg/autostart/swww.desktop << 'EOF'
+[Desktop Entry]
+Type=Application
+Name=Wallpaper Daemon
+Exec=swww-daemon
+OnlyShowIn=UniversalLite;
+X-GNOME-Autostart-enabled=true
+EOF
+
+# Set default wallpaper
+cat > /etc/xdg/autostart/set-wallpaper.desktop << 'EOF'
+[Desktop Entry]
+Type=Application
+Name=Set Default Wallpaper
+Exec=swww img /usr/share/backgrounds/universallite/default.jpg --transition-type wipe --transition-fps 60 --transition-duration 1
+OnlyShowIn=UniversalLite;
+X-GNOME-Autostart-enabled=true
+EOF
+
+echo "=== Desktop installation complete ==="

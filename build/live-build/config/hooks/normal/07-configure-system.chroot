@@ -1,0 +1,436 @@
+#!/bin/bash
+# Hook: 07-configure-system
+# Configure system services, users, profiles, and defaults
+
+set -euo pipefail
+
+echo "=== Configuring UniversalLite System ==="
+
+# Systemd Configuration
+mkdir -p /etc/systemd/system.conf.d
+cat > /etc/systemd/system.conf.d/universallite.conf << 'EOF'
+[Manager]
+# Performance optimizations
+DefaultTimeoutStartSec=15s
+DefaultTimeoutStopSec=10s
+DefaultRestartSec=5s
+DefaultLimitNOFILE=65536
+DefaultLimitNPROC=32768
+
+# Logging
+MaxLevelStore=info
+MaxLevelSyslog=info
+MaxLevelKMsg=notice
+MaxLevelConsole=info
+MaxLevelWall=emerg
+
+# Resource limits
+DefaultMemoryAccounting=yes
+DefaultCPUAccounting=yes
+DefaultIOAccounting=yes
+DefaultTasksAccounting=yes
+EOF
+
+# Journal Configuration
+mkdir -p /etc/systemd/journald.conf.d
+cat > /etc/systemd/journald.conf.d/universallite.conf << 'EOF'
+[Journal]
+Storage=persistent
+Compress=yes
+Seal=yes
+SplitMode=uid
+SyncIntervalSec=5m
+RateLimitIntervalSec=30s
+RateLimitBurst=10000
+SystemMaxUse=500M
+SystemKeepFree=1G
+SystemMaxFileSize=50M
+MaxRetentionSec=2week
+MaxFileSec=1day
+ForwardToSyslog=no
+ForwardToKMsg=no
+ForwardToConsole=no
+ForwardToWall=yes
+TTYPath=/dev/console
+MaxLevelStore=info
+MaxLevelSyslog=info
+MaxLevelKMsg=notice
+MaxLevelConsole=info
+MaxLevelWall=emerg
+EOF
+
+# Network Configuration (systemd-networkd)
+mkdir -p /etc/systemd/network
+cat > /etc/systemd/network/20-wired.network << 'EOF'
+[Match]
+Name=en*
+Type=ether
+
+[Network]
+DHCP=yes
+IPv6AcceptRA=yes
+MulticastDNS=yes
+LLMNR=yes
+EOF
+
+cat > /etc/systemd/network/25-wireless.network << 'EOF'
+[Match]
+Name=wl*
+Type=wlan
+
+[Network]
+DHCP=yes
+IPv6AcceptRA=yes
+MulticastDNS=yes
+LLMNR=yes
+EOF
+
+# NetworkManager Configuration (for WiFi ease)
+mkdir -p /etc/NetworkManager/conf.d
+cat > /etc/NetworkManager/conf.d/universallite.conf << 'EOF'
+[main]
+dhcp=internal
+dns=systemd-resolved
+rc-manager=systemd-resolved
+
+[connectivity]
+uri=http://connectivity-check.ubuntu.com/
+interval=300
+
+[device]
+wifi.scan-rand-mac-address=yes
+wifi.backend=wpa_supplicant
+
+[logging]
+level=INFO
+domains=ALL
+EOF
+
+# Resolved Configuration
+mkdir -p /etc/systemd/resolved.conf.d
+cat > /etc/systemd/resolved.conf.d/universallite.conf << 'EOF'
+[Resolve]
+DNS=1.1.1.1 8.8.8.8 9.9.9.9
+DNSOverTLS=yes
+MulticastDNS=yes
+LLMNR=yes
+Cache=yes
+DNSSEC=allow-downgrade
+DNSStubListener=yes
+ReadEtcHosts=yes
+EOF
+
+# Timesyncd Configuration
+mkdir -p /etc/systemd/timesyncd.conf.d
+cat > /etc/systemd/timesyncd.conf.d/universallite.conf << 'EOF'
+[Time]
+NTP=time.cloudflare.com time.google.com time.apple.com
+FallbackNTP=pool.ntp.org
+RootDistanceMaxSec=5
+PollIntervalMinSec=32
+PollIntervalMaxSec=2048
+EOF
+
+# ZRAM Configuration (compressed swap)
+mkdir -p /etc/systemd/zram-generator.conf.d
+cat > /etc/systemd/zram-generator.conf.d/universallite.conf << 'EOF'
+[zram0]
+zram-size = min(ram / 2, 4096)
+compression-algorithm = zstd
+swap-priority = 100
+fs-type = swap
+EOF
+
+# Kernel Parameters (sysctl)
+mkdir -p /etc/sysctl.d
+cat > /etc/sysctl.d/99-universallite.conf << 'EOF'
+# UniversalLite Performance Tuning
+
+# Memory Management
+vm.swappiness = 60
+vm.vfs_cache_pressure = 50
+vm.dirty_ratio = 10
+vm.dirty_background_ratio = 5
+vm.dirty_expire_centisecs = 3000
+vm.dirty_writeback_centisecs = 500
+vm.min_free_kbytes = 65536
+vm.watermark_scale_factor = 10
+
+# ZRAM
+vm.zram_enabled = 1
+
+# Network
+net.core.netdev_max_backlog = 5000
+net.core.somaxconn = 4096
+net.ipv4.tcp_fastopen = 3
+net.ipv4.tcp_slow_start_after_idle = 0
+net.ipv4.tcp_mtu_probing = 1
+
+# Filesystem
+fs.inotify.max_user_watches = 524288
+fs.inotify.max_user_instances = 1024
+
+# Kernel
+kernel.sched_autogroup_enabled = 1
+kernel.sched_migration_cost_ns = 5000000
+kernel.numa_balancing = 1
+
+# Security
+kernel.kptr_restrict = 2
+kernel.dmesg_restrict = 1
+kernel.perf_event_paranoid = 3
+kernel.yama.ptrace_scope = 1
+vm.mmap_rnd_bits = 32
+vm.mmap_rnd_compat_bits = 16
+EOF
+
+# Profile Configuration
+mkdir -p /etc/universallite/profiles
+
+# Ultra Lite Profile
+cat > /etc/universallite/profiles/ultra-lite.conf << 'EOF'
+[Profile]
+name=Ultra Lite
+description=Minimal services for maximum performance on low-end hardware
+target_ram=512M
+
+[Services]
+# Disabled services
+disabled=pipewire bluetooth waydroid universalbridge network-manager udiskie
+
+# Enabled services
+enabled=systemd-networkd systemd-resolved systemd-timesyncd labwc waybar mako
+
+[Kernel]
+zram_size=ram/2
+swappiness=80
+
+[Desktop]
+animations=false
+blur=false
+shadows=false
+wallpaper=solid
+EOF
+
+# Balanced Profile
+cat > /etc/universallite/profiles/balanced.conf << 'EOF'
+[Profile]
+name=Balanced
+description=Recommended everyday configuration
+target_ram=1G
+
+[Services]
+disabled=waydroid
+enabled=systemd-networkd systemd-resolved systemd-timesyncd pipewire wireplumber bluetooth network-manager udiskie labwc waybar mako universalbridge
+
+[Kernel]
+zram_size=ram/2
+swappiness=60
+
+[Desktop]
+animations=true
+blur=true
+shadows=true
+wallpaper=dynamic
+EOF
+
+# Performance Profile
+cat > /etc/universallite/profiles/performance.conf << 'EOF'
+[Profile]
+name=Performance
+description=Full featured for powerful hardware
+target_ram=4G
+
+[Services]
+enabled=systemd-networkd systemd-resolved systemd-timesyncd pipewire wireplumber bluetooth network-manager udiskie labwc waybar mako universalbridge waydroid tlp power-profiles-daemon
+
+[Kernel]
+zram_size=ram/4
+swappiness=40
+
+[Desktop]
+animations=true
+blur=true
+shadows=true
+wallpaper=dynamic
+effects=full
+EOF
+
+# Profile Switcher Script
+cat > /usr/bin/universallite-profile << 'EOF'
+#!/bin/bash
+# UniversalLite Profile Switcher
+
+set -euo pipefail
+
+PROFILE="${1:-}"
+VALID_PROFILES=("ultra-lite" "balanced" "performance")
+
+if [[ -z "$PROFILE" ]]; then
+    echo "Current profile: $(cat /etc/universallite/current-profile 2>/dev/null || echo 'balanced')"
+    echo "Usage: universallite-profile <${VALID_PROFILES[*]}>"
+    exit 0
+fi
+
+if [[ ! " ${VALID_PROFILES[*]} " =~ " ${PROFILE} " ]]; then
+    echo "Error: Invalid profile. Valid: ${VALID_PROFILES[*]}"
+    exit 1
+fi
+
+echo "Switching to profile: $PROFILE"
+
+# Write current profile
+echo "$PROFILE" > /etc/universallite/current-profile
+
+# Apply profile
+CONFIG_FILE="/etc/universallite/profiles/${PROFILE}.conf"
+
+# Parse config and enable/disable services
+while IFS= read -r line; do
+    if [[ "$line" =~ ^disabled=(.*) ]]; then
+        for service in ${BASH_REMATCH[1]}; do
+            systemctl --global disable "$service" 2>/dev/null || true
+            systemctl --user disable "$service" 2>/dev/null || true
+        done
+    elif [[ "$line" =~ ^enabled=(.*) ]]; then
+        for service in ${BASH_REMATCH[1]}; do
+            systemctl --global enable "$service" 2>/dev/null || true
+            systemctl --user enable "$service" 2>/dev/null || true
+        done
+    fi
+done < "$CONFIG_FILE"
+
+# Kernel parameters
+if grep -q "swappiness=" "$CONFIG_FILE"; then
+    SWAPPINESS=$(grep "swappiness=" "$CONFIG_FILE" | cut -d= -f2)
+    sysctl -w vm.swappiness="$SWAPPINESS"
+    sed -i "s/vm.swappiness = .*/vm.swappiness = $SWAPPINESS/" /etc/sysctl.d/99-universallite.conf
+fi
+
+echo "Profile switched. Reboot or re-login for full effect."
+EOF
+chmod +x /usr/bin/universallite-profile
+
+# Default profile
+echo "balanced" > /etc/universallite/current-profile
+
+# User Skeleton (for new users)
+mkdir -p /etc/skel/.config/labwc
+cp /etc/xdg/labwc/rc.xml /etc/skel/.config/labwc/
+cp /etc/xdg/labwc/environment /etc/skel/.config/labwc/
+
+mkdir -p /etc/skel/.config/waybar
+cp /etc/xdg/waybar/config.jsonc /etc/skel/.config/waybar/
+cp /etc/xdg/waybar/style.css /etc/skel/.config/waybar/
+
+mkdir -p /etc/skel/.config/mako
+cp /etc/mako/config /etc/skel/.config/mako/
+
+mkdir -p /etc/skel/.config/foot
+cp /etc/xdg/foot/foot.ini /etc/skel/.config/foot/
+
+# Autostart for user
+mkdir -p /etc/skel/.config/autostart
+cp /etc/xdg/autostart/*.desktop /etc/skel/.config/autostart/
+
+# Locale & Keyboard
+cat > /etc/default/locale << 'EOF'
+LANG=en_US.UTF-8
+LANGUAGE=en_US:en
+LC_ALL=en_US.UTF-8
+EOF
+
+# Keyboard (will be set by installer)
+mkdir -p /etc/default/keyboard
+cat > /etc/default/keyboard << 'EOF'
+XKBMODEL=pc105
+XKBLAYOUT=us
+XKBVARIANT=
+XKBOPTIONS=ctrl:nocaps
+BACKSPACE=guess
+EOF
+
+# Fonts Configuration
+mkdir -p /etc/fonts/local.conf.d
+cat > /etc/fonts/local.conf.d/99-universallite.conf << 'EOF'
+<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+  <match target="font">
+    <edit name="antialias" mode="assign"><bool>true</bool></edit>
+    <edit name="hinting" mode="assign"><bool>true</bool></edit>
+    <edit name="hintstyle" mode="assign"><const>hintslight</const></edit>
+    <edit name="rgba" mode="assign"><const>rgb</const></edit>
+    <edit name="lcdfilter" mode="assign"><const>lcddefault</const></edit>
+  </match>
+  <match target="pattern">
+    <test qual="any" name="family"><string>sans-serif</string></test>
+    <edit name="family" mode="prepend" binding="strong"><string>Cantarell</string><string>Noto Sans</string><string>DejaVu Sans</string></edit>
+  </match>
+  <match target="pattern">
+    <test qual="any" name="family"><string>monospace</string></test>
+    <edit name="family" mode="prepend" binding="strong"><string>JetBrains Mono</string><string>Noto Sans Mono</string><string>DejaVu Sans Mono</string></edit>
+  </match>
+</fontconfig>
+EOF
+
+# Plymouth Theme (Boot Splash)
+mkdir -p /usr/share/plymouth/themes/universallite
+cat > /usr/share/plymouth/themes/universallite/universallite.plymouth << 'EOF'
+[Plymouth Theme]
+Name=UniversalLite
+Description=UniversalLite OS Boot Splash
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/universallite
+ScriptFile=/usr/share/plymouth/themes/universallite/universallite.script
+EOF
+
+cat > /usr/share/plymouth/themes/universallite/universallite.script << 'EOF'
+# UniversalLite Plymouth Theme Script
+wallpaper = Image("background.png");
+screen_width = Window.GetWidth();
+screen_height = Window.GetHeight();
+wallpaper_sprite = Sprite();
+wallpaper_sprite.SetImage(wallpaper);
+wallpaper_sprite.SetPosition(0, 0, screen_width, screen_height);
+
+# Progress bar
+progress_box = Image("progress_box.png");
+progress_bar = Image("progress_bar.png");
+progress_sprite = Sprite();
+progress_sprite.SetImage(progress_box);
+progress_sprite.SetPosition((screen_width - progress_box.GetWidth()) / 2, screen_height * 0.7);
+
+progress_bar_sprite = Sprite();
+progress_bar_sprite.SetImage(progress_bar);
+progress_bar_sprite.SetPosition((screen_width - progress_bar.GetWidth()) / 2, screen_height * 0.7);
+
+fun progress_callback(duration, progress) {
+    progress_bar_sprite.SetSize(progress_bar.GetWidth() * progress, progress_bar.GetHeight());
+}
+
+Plymouth.SetBootProgressFunction(progress_callback);
+EOF
+
+# Update initramfs for plymouth
+plymouth-set-default-theme universallite -R
+
+# Enable Services
+systemctl enable systemd-networkd
+systemctl enable systemd-resolved
+systemctl enable systemd-timesyncd
+systemctl enable systemd-zram-setup@zram0
+systemctl enable fstrim.timer
+systemctl enable plymouth-start
+
+# User services (global enable)
+systemctl --global enable pipewire pipewire-pulse wireplumber 2>/dev/null || true
+systemctl --global enable bluetooth 2>/dev/null || true
+systemctl --global enable universalbridge-daemon 2>/dev/null || true
+systemctl --global enable waydroid-container 2>/dev/null || true
+systemctl --global enable universal-appcenter-updates.timer 2>/dev/null || true
+systemctl --global enable universal-ai.socket 2>/dev/null || true
+
+echo "=== System configuration complete ==="

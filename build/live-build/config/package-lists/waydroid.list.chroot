@@ -1,0 +1,50 @@
+# UniversalLite OS - Waydroid (Android Compatibility) Packages
+
+# Kernel Modules (built into custom kernel)
+# CONFIG_ANDROID_BINDER_IPC=y
+# CONFIG_ANDROID_BINDERFS=y
+# CONFIG_ASHMEM=y
+
+# Waydroid Core
+waydroid
+lxc
+lxc-utils
+lxc-templates
+python3-gbinder
+python3-pydbus
+
+# Android Rootfs (downloaded at first run via hook)
+# LineageOS-based images:
+# - waydroid-gapps (with Play Store)
+# - waydroid-microg (privacy-focused)
+# - waydroid-minimal (sideload only)
+
+# Graphics Acceleration
+virglrenderer
+venus-vulkan
+mesa-vulkan-drivers
+libvulkan1
+libegl1
+libgles2
+
+# Audio Routing
+pipewire
+pipewire-pulse
+wireplumber
+libspa-0.2-bluetooth
+
+# ADB & Fastboot (for sideloading)
+android-sdk-platform-tools
+android-sdk-platform-tools-common
+
+# Desktop Integration
+waydroid-shell
+xdg-desktop-portal-wlr
+
+# SELinux (for container security)
+policycoreutils
+selinux-utils
+selinux-basics
+
+# Waydroid service runs as systemd user service (socket-activated)
+# Container starts on-demand when user launches Android app

@@ -1,0 +1,53 @@
+# UniversalLite OS - Universal App Center Packages
+
+# Flatpak
+flatpak
+flatpak-builder
+gnome-software-plugin-flatpak
+xdg-desktop-portal-gtk
+
+# Flathub Remote (added via hook)
+# flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+
+# UniversalLite Flatpak Remote (custom, added via hook)
+# flatpak remote-add --if-not-exists universallite https://flatpak.universallite.os/repo.flatpakrepo
+
+# App Center Backend (custom)
+universal-appcenter-backend
+universal-appcenter-frontend
+universal-appcenter-cli
+
+# PackageKit (for system updates)
+packagekit
+packagekit-tools
+gnome-software-plugin-packagekit
+
+# APT Integration
+apt-listchanges
+apt-listbugs
+unattended-upgrades
+apt-config-auto-update
+
+# Web App Support (Nativefier)
+nodejs
+npm
+# nativefier installed via npm in hook
+
+# AppStream Metadata
+appstream
+appstream-index
+appstreamcli
+
+# Compatibility Database
+universalbridge-compatdb
+waydroid-appdb
+
+# Permissions & Sandboxing
+bubblewrap
+flatpak-spawn
+
+# Update Notifications
+update-notifier
+update-manager
+
+# Universal App Center: Unified search across APT, Flatpak, Windows (.exe), Android (APK), Web Apps

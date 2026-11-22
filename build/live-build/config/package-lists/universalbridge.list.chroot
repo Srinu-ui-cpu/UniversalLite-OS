@@ -1,0 +1,84 @@
+# UniversalLite OS - UniversalBridge (Windows Compatibility) Packages
+
+# WineHQ Repository Key & Source (added via hook)
+# winehq-stable
+# winehq-staging
+# winehq-devel
+
+# Core Wine
+wine
+wine64
+wine32
+wine-binfmt
+libwine
+libwine:i386
+fonts-wine
+
+# Wine Dependencies
+libasound2:i386
+libasound2-plugins:i386
+libc6:i386
+libglib2.0-0:i386
+libgphoto2-6:i386
+libgstreamer-plugins-base1.0-0:i386
+libgstreamer1.0-0:i386
+libldap-2.5-0:i386
+libopenal1:i386
+libpcap0.8:i386
+libpulse0:i386
+libsane1:i386
+libudev1:i386
+libx11-6:i386
+libxext6:i386
+libxml2:i386
+libxslt1.1:i386
+zlib1g:i386
+libvulkan1:i386
+libvkd3d1:i386
+libdxvk1:i386
+
+# Wine Mono & Gecko
+wine-mono
+wine-gecko
+
+# Winetricks
+winetricks
+
+# DXVK & VKD3D (Vulkan translation layers)
+dxvk
+vkd3d
+vkd3d-proton
+
+# Box86 & Box64 (ARM64/ARMhf x86 emulation)
+# Installed from Ryan Fortner's repos via hook
+box86
+box64
+
+# 32-bit libraries for Box86 (ARM64)
+libc6:armhf
+libstdc++6:armhf
+libgcc-s1:armhf
+libglib2.0-0:armhf
+libpng16-16:armhf
+libfreetype6:armhf
+libasound2:armhf
+libpulse0:armhf
+libx11-6:armhf
+libxext6:armhf
+libxi6:armhf
+libxrandr2:armhf
+libxrender1:armhf
+libxxf86vm1:armhf
+libdrm2:armhf
+libvulkan1:armhf
+
+# UniversalBridge Daemon (custom package)
+universalbridge-daemon
+universalbridge-ui
+universalbridge-compatdb
+
+# Desktop Integration
+desktop-file-utils
+shared-mime-info
+mime-support
+xdg-utils

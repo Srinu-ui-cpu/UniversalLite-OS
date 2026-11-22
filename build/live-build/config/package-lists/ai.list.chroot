@@ -1,0 +1,52 @@
+# UniversalLite OS - Universal AI (Optional) Packages
+
+# Local Model Runtime
+llama.cpp
+llama.cpp-tools
+# GGUF models downloaded at runtime
+
+# ONNX Runtime
+onnxruntime
+onnxruntime-tools
+
+# Python AI Stack
+python3-numpy
+python3-scipy
+python3-tokenizers
+python3-huggingface-hub
+python3-transformers
+python3-accelerate
+python3-safetensors
+python3-gguf
+
+# Remote API Clients
+python3-openai
+python3-anthropic
+python3-google-generativeai
+python3-openrouter
+
+# D-Bus & System Integration
+python3-dbus
+python3-gobject
+python3-systemd
+
+# Encryption (for local memory)
+python3-cryptography
+python3-sqlcipher3
+
+# Universal AI Service (custom)
+universal-ai-daemon
+universal-ai-cli
+universal-ai-tools
+
+# Desktop Integration
+universal-ai-launcher-plugin
+
+# Socket-activated systemd user service
+# Zero memory when not in use
+# Starts on first request via D-Bus or CLI
+
+# Optional: Hardware acceleration
+# nvidia-cuda-toolkit (if NVIDIA GPU)
+# intel-opencl-icd (if Intel GPU)
+# rocm-opencl-runtime (if AMD GPU)

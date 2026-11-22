@@ -1,0 +1,152 @@
+# UniversalLite OS - Desktop Packages (Performance Variant)
+# Full featured for powerful hardware
+
+# Include Balanced base (all packages from balanced + more)
+
+# Enhanced Compositor Features
+labwc
+waybar
+mako-notifier
+swaylock-effects
+swww
+wl-clipboard
+wlr-randr
+wlr-ctl
+xdg-desktop-portal-wlr
+xdg-desktop-portal-gtk
+
+# Terminal & File Manager (enhanced)
+foot
+thunar
+thunar-archive-plugin
+thunar-volman
+tumbler
+ffmpegthumbnailer
+thunar-media-tags-plugin
+catfish
+
+# Launcher
+universallite-launcher
+
+# Settings & System Tools (full GNOME-like)
+grim
+slurp
+swappy
+wl-gammactl
+brightnessctl
+playerctl
+pamixer
+pulsemixer
+gnome-keyring
+seahorse
+gnome-control-center
+gnome-system-monitor
+gnome-disk-utility
+gnome-logs
+baobab
+
+# Fonts & Themes (extended)
+fonts-dejavu
+fonts-liberation
+fonts-noto
+fonts-noto-color-emoji
+fonts-noto-cjk
+fonts-jetbrains-mono
+fonts-firacode
+adwaita-icon-theme
+gtk4-nocsd
+libadwaita-1-dev
+gtk-theme-yaru
+yaru-theme-icon
+yaru-theme-gtk
+yaru-theme-sound
+
+# Authentication
+polkit-kde-agent-1
+
+# Wallpapers
+universallite-wallpapers
+
+# Audio (Full PipeWire + Effects)
+pipewire
+pipewire-pulse
+wireplumber
+libspa-0.2-bluetooth
+libspa-0.2-jack
+pavucontrol
+easyeffects
+helvum
+qjackctl
+
+# Bluetooth (Full)
+bluez
+bluez-tools
+bluetuith
+gnome-bluetooth-3.0
+blueberry
+
+# Network (Full)
+network-manager
+network-manager-gnome
+nm-tray
+network-manager-openvpn-gnome
+network-manager-openconnect-gnome
+network-manager-ssh-gnome
+
+# Automount (Full)
+udiskie
+gvfs
+gvfs-backends
+gvfs-fuse
+
+# Notifications (Full)
+mako-notifier
+libnotify-bin
+notification-daemon
+
+# Power Management (Advanced)
+upower
+tlp
+tlp-rdw
+power-profiles-daemon
+auto-cpufreq
+
+# Screenshot & Recording (Pro)
+grim
+slurp
+swappy
+wf-recorder
+obs-studio
+kooha
+
+# Clipboard History (Advanced)
+cliphist
+copyq
+
+# Virtual Desktops (Enhanced)
+waybar-module-workspaces
+wlr-ctl
+
+# Additional Apps
+firefox-esr
+libreoffice
+vlc
+gimp
+inkscape
+code-oss
+
+# Development Tools
+docker.io
+docker-compose
+podman
+buildah
+skopeo
+
+# Virtualization
+virt-manager
+libvirt-daemon-system
+qemu-kvm
+bridge-utils
+
+# Performance: All services + extra apps + development tools
+# Use on 4GB+ RAM systems

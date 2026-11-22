@@ -1,0 +1,326 @@
+#!/bin/bash
+# Hook: 04-install-waydroid
+# Install Waydroid for Android app compatibility
+
+set -euo pipefail
+
+echo "=== Installing Waydroid (Android Compatibility) ==="
+
+# Add Waydroid Repository
+mkdir -p /etc/apt/keyrings
+wget -qO- https://repo.waydro.id/waydroid.gpg | gpg --dearmor -o /etc/apt/keyrings/waydroid.gpg
+echo "deb [signed-by=/etc/apt/keyrings/waydroid.gpg] https://repo.waydro.id/ trixie main" > /etc/apt/sources.list.d/waydroid.list
+
+# Update and install
+apt-get update
+apt-get install -y --no-install-recommends \
+    waydroid \
+    lxc \
+    lxc-utils \
+    lxc-templates \
+    python3-gbinder \
+    python3-pydbus \
+    android-sdk-platform-tools \
+    android-sdk-platform-tools-common \
+    virglrenderer \
+    venus-vulkan \
+    libvulkan1 \
+    libegl1 \
+    libgles2 \
+    pipewire \
+    pipewire-pulse \
+    wireplumber \
+    policycoreutils \
+    selinux-utils \
+    selinux-basics
+
+# Configure LXC for Waydroid
+cat > /etc/lxc/default.conf << 'EOF'
+lxc.include = /etc/lxc/default.conf
+lxc.arch = linux64
+lxc.apparmor.profile = unconfined
+lxc.cgroup.devices.allow = a
+lxc.cap.drop = 
+lxc.mount.auto = proc:rw sys:rw cgroup:rw
+lxc.mount.entry = /dev/binder dev/binder none bind,optional,create=file 0 0
+lxc.mount.entry = /dev/vndbinder dev/vndbinder none bind,optional,create=file 0 0
+lxc.mount.entry = /dev/hwbinder dev/hwbinder none bind,optional,create=file 0 0
+lxc.mount.entry = /dev/ashmem dev/ashmem none bind,optional,create=file 0 0
+EOF
+
+# Waydroid Configuration
+mkdir -p /etc/waydroid
+cat > /etc/waydroid/waydroid.cfg << 'EOF'
+[waydroid]
+# Waydroid configuration
+container_name = waydroid
+container_type = android
+image_path = /var/lib/waydroid/images
+rootfs_path = /var/lib/waydroid/rootfs
+vendor_path = /var/lib/waydroid/vendor
+system_path = /var/lib/waydroid/system
+
+# Graphics
+gpu_mode = auto
+gpu_driver = virgl
+gpu_render_node = /dev/dri/renderD128
+
+# Audio
+audio_driver = pipewire
+
+# Network
+network_mode = bridge
+bridge_interface = lxcbr0
+
+# Sensors
+sensor_hub = true
+
+# ADB
+adb_enabled = true
+adb_port = 5555
+
+# Window
+window_mode = managed
+window_width = 1024
+window_height = 768
+EOF
+
+# Waydroid Systemd Service (user, socket-activated)
+mkdir -p /usr/lib/systemd/user
+cat > /usr/lib/systemd/user/waydroid-container.service << 'EOF'
+[Unit]
+Description=Waydroid Android Container
+Documentation=https://waydro.id
+After=graphical-session.target pipewire.service
+Requires=pipewire.service
+ConditionPathExists=/var/lib/waydroid/rootfs/system.img
+
+[Service]
+Type=notify
+ExecStartPre=/usr/bin/waydroid session start
+ExecStart=/usr/bin/waydroid show-full-ui
+ExecStop=/usr/bin/waydroid session stop
+Restart=on-failure
+RestartSec=10
+MemoryLimit=2G
+CPUQuota=200%
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/waydroid
+ReadWritePaths=/home/%u/.local/share/waydroid
+ReadWritePaths=/home/%u/.cache/waydroid
+
+# Capabilities needed for container
+CapabilityBoundingSet=CAP_SYS_ADMIN CAP_SYS_RESOURCE CAP_DAC_OVERRIDE CAP_SYS_CHROOT CAP_MKNOD CAP_SYS_MODULE
+AmbientCapabilities=CAP_SYS_ADMIN CAP_SYS_RESOURCE CAP_DAC_OVERRIDE CAP_SYS_CHROOT CAP_MKNOD CAP_SYS_MODULE
+
+[Install]
+WantedBy=wayland-session.target
+EOF
+
+# Waydroid Socket Activation
+cat > /usr/lib/systemd/user/waydroid.socket << 'EOF'
+[Unit]
+Description=Waydroid Activation Socket
+Documentation=https://waydro.id
+
+[Socket]
+ListenStream=%t/waydroid.socket
+SocketMode=0666
+
+[Install]
+WantedBy=sockets.target
+EOF
+
+cat > /usr/lib/systemd/user/waydroid-container.service.d/override.conf << 'EOF'
+[Service]
+Sockets=waydroid.socket
+EOF
+
+# Waydroid CLI Wrapper
+cat > /usr/bin/waydroid-launch << 'EOF'
+#!/bin/bash
+# Waydroid Launch Helper - Launch Android apps from desktop
+
+set -euo pipefail
+
+APP_PACKAGE="${1:-}"
+APP_ACTIVITY="${2:-}"
+
+if [[ -z "$APP_PACKAGE" ]]; then
+    # Show full UI
+    exec waydroid show-full-ui
+fi
+
+# Launch specific app
+if [[ -z "$APP_ACTIVITY" ]]; then
+    # Try to get main activity
+    APP_ACTIVITY=$(waydroid shell cmd package resolve-activity --brief "$APP_PACKAGE" 2>/dev/null | head -1 || echo "")
+fi
+
+if [[ -n "$APP_ACTIVITY" ]]; then
+    exec waydroid app launch "$APP_PACKAGE/$APP_ACTIVITY"
+else
+    exec waydroid app launch "$APP_PACKAGE"
+fi
+EOF
+chmod +x /usr/bin/waydroid-launch
+
+# APK Handler
+cat > /usr/bin/waydroid-install-apk << 'EOF'
+#!/bin/bash
+# Waydroid APK Installer - Handle .apk files
+
+set -euo pipefail
+
+APK_FILE="${1:-}"
+
+if [[ -z "$APK_FILE" ]]; then
+    echo "Usage: waydroid-install-apk <file.apk>"
+    exit 1
+fi
+
+if [[ ! -f "$APK_FILE" ]]; then
+    echo "Error: File not found: $APK_FILE"
+    exit 1
+fi
+
+echo "Installing APK: $APK_FILE"
+waydroid app install "$APK_FILE"
+
+echo "APK installed successfully"
+EOF
+chmod +x /usr/bin/waydroid-install-apk
+
+# MIME Type Registration for APK
+mkdir -p /usr/share/mime/packages
+cat > /usr/share/mime/packages/waydroid.xml << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/vnd.android.package-archive">
+    <comment>Android Package</comment>
+    <glob pattern="*.apk"/>
+    <glob pattern="*.APK"/>
+    <magic priority="50">
+      <match type="string" value="PK" offset="0"/>
+    </magic>
+  </mime-type>
+</mime-info>
+EOF
+
+# Desktop Entry for APK
+mkdir -p /usr/share/applications
+cat > /usr/share/applications/waydroid-install-apk.desktop << 'EOF'
+[Desktop Entry]
+Type=Application
+Name=Waydroid APK Installer
+Comment=Install Android Applications
+Exec=waydroid-install-apk %f
+Icon=android
+Terminal=false
+MimeType=application/vnd.android.package-archive;
+Categories=System;Emulator;
+StartupNotify=true
+Keywords=android;apk;waydroid;install;
+EOF
+
+# Desktop Entry for Waydroid
+cat > /usr/share/applications/waydroid.desktop << 'EOF'
+[Desktop Entry]
+Type=Application
+Name=Waydroid
+Comment=Android Compatibility Layer
+Exec=waydroid show-full-ui
+Icon=android
+Terminal=false
+Categories=System;Emulator;
+StartupNotify=true
+Keywords=android;container;compatibility;
+EOF
+
+# Update MIME and Desktop databases
+update-mime-database /usr/share/mime
+update-desktop-database /usr/share/applications
+
+# Waydroid Images Download Script (run at first boot)
+cat > /usr/libexec/waydroid/download-images << 'EOF'
+#!/bin/bash
+# Download Waydroid images at first boot
+
+set -euo pipefail
+
+IMAGES_DIR="/var/lib/waydroid/images"
+mkdir -p "$IMAGES_DIR"
+
+# Check if images already exist
+if [[ -f "$IMAGES_DIR/system.img" && -f "$IMAGES_DIR/vendor.img" ]]; then
+    echo "Waydroid images already present"
+    exit 0
+fi
+
+echo "Downloading Waydroid images (this may take a while)..."
+
+# Download minimal image by default (user can choose variant later)
+# Images from https://github.com/waydroid/images
+cd "$IMAGES_DIR"
+
+# System image (LineageOS 21 / Android 14 based)
+wget -q --show-progress "https://github.com/waydroid/images/releases/download/20240101/waydroid_system_minimal.tar.xz" -O system.tar.xz
+tar -xf system.tar.xz
+rm system.tar.xz
+
+# Vendor image
+wget -q --show-progress "https://github.com/waydroid/images/releases/download/20240101/waydroid_vendor.tar.xz" -O vendor.tar.xz
+tar -xf vendor.tar.xz
+rm vendor.tar.xz
+
+echo "Waydroid images downloaded and extracted"
+EOF
+chmod +x /usr/libexec/waydroid/download-images
+
+# First-boot service to download images
+cat > /usr/lib/systemd/system/waydroid-firstboot.service << 'EOF'
+[Unit]
+Description=Download Waydroid Images at First Boot
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=!/var/lib/waydroid/images/system.img
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/waydroid/download-images
+RemainAfterExit=yes
+StandardOutput=journal+console
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Enable first-boot service
+mkdir -p /etc/systemd/system/multi-user.target.wants
+ln -sf /usr/lib/systemd/system/waydroid-firstboot.service /etc/systemd/system/multi-user.target.wants/waydroid-firstboot.service
+
+# SELinux Policy for Waydroid (if SELinux enabled)
+if command -v semodule &>/dev/null; then
+    cat > /usr/share/selinux/packages/waydroid.te << 'EOF'
+module waydroid 1.0;
+
+require {
+    type unconfined_t;
+    type container_t;
+    class capability { sys_admin sys_resource dac_override sys_chroot mknod sys_module };
+    class process { fork transition };
+    class filesystem { mount unmount getattr };
+}
+
+allow unconfined_t container_t:capability { sys_admin sys_resource dac_override sys_chroot mknod sys_module };
+allow unconfined_t container_t:process { fork transition };
+allow unconfined_t container_t:filesystem { mount unmount getattr };
+EOF
+fi
+
+echo "=== Waydroid installation complete ==="

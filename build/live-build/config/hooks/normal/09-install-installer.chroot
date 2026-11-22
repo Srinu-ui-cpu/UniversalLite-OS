@@ -1,0 +1,897 @@
+#!/bin/bash
+# Hook: 09-install-installer
+# Install Calamares-based graphical installer
+
+set -euo pipefail
+
+echo "=== Installing UniversalLite Installer ==="
+
+# Install Calamares and dependencies
+apt-get update
+apt-get install -y --no-install-recommends \
+    calamares \
+    calamares-settings-debian \
+    qml-module-qtquick-controls2 \
+    qml-module-qtquick-layouts \
+    qml-module-qtquick-dialogs \
+    qml-module-qtquick-window2 \
+    qml-module-qtgraphicaleffects \
+    qml-module-qtqml-models2 \
+    qml-module-qtquick-templates2 \
+    kio \
+    kio-extras \
+    partitionmanager \
+    libkpmcore-dev \
+    python3-pyqt5 \
+    python3-pyqt5.qtsvg \
+    python3-pyqt5.qtwebkit \
+    python3-packaging \
+    python3-yaml \
+    python3-requests \
+    python3-distutils \
+    python3-setuptools \
+    python3-wheel \
+    python3-pip \
+    python3-venv \
+    python3-dev \
+    python3-cryptography \
+    python3-paramiko \
+    python3-psutil \
+    python3-dbus \
+    python3-gobject \
+    python3-gi \
+    python3-gi-cairo \
+    gir1.2-gtk-4.0 \
+    gir1.2-adw-1 \
+    gir1.2-pango-1.0 \
+    gir1.2-gdkpixbuf-2.0 \
+    libblockdev-utils \
+    libblockdev-mdraid2 \
+    libblockdev-lvm2 \
+    libblockdev-crypto2 \
+    libblockdev-btrfs2 \
+    libblockdev-fs2 \
+    libblockdev-loop2 \
+    libblockdev-part2 \
+    libblockdev-swap2 \
+    libblockdev-utils2 \
+    udisks2 \
+    policykit-1 \
+    polkitd \
+    gparted \
+    parted \
+    gdisk \
+    fdisk \
+    efibootmgr \
+    grub-efi-amd64 \
+    grub-efi-arm64 \
+    grub-pc \
+    shim-signed \
+    os-prober \
+    mtools \
+    dosfstools \
+    e2fsprogs \
+    btrfs-progs \
+    xfsprogs \
+    f2fs-tools \
+    ntfs-3g \
+    exfatprogs \
+    cryptsetup \
+    lvm2 \
+    mdadm \
+    dmraid \
+    multipath-tools \
+    keyutils \
+    ecryptfs-utils
+
+# Calamares Configuration
+mkdir -p /etc/calamares/modules
+mkdir -p /etc/calamares/branding/universallite
+mkdir -p /usr/share/calamares/modules
+
+# Main Calamares settings
+cat > /etc/calamares/settings.conf << 'EOF'
+# UniversalLite Calamares Settings
+
+branding: universallite
+
+# Window
+windowTitle: "UniversalLite OS Installer"
+windowIcon: "/usr/share/icons/hicolor/256x256/apps/universallite-installer.png"
+windowSize: [800, 600]
+windowFixedSize: true
+
+# Sequence
+sequence:
+  - show:
+      - welcome
+      - locale
+      - keyboard
+      - partition
+      - users
+      - summary
+  - exec:
+      - mountpartitions
+      - unpackfs
+      - machineid
+      - fstab
+      - displaymanager
+      - bootloader
+      - users
+      - locale
+      - keyboard
+      - networkcfg
+      - services
+      - grubcfg
+      - initcpiocfg
+      - postcfg
+      - umountpartitions
+  - show:
+      - finished
+
+# Default modules
+modules:
+  - welcome
+  - locale
+  - keyboard
+  - partition
+  - users
+  - summary
+  - mountpartitions
+  - unpackfs
+  - machineid
+  - fstab
+  - displaymanager
+  - bootloader
+  - networkcfg
+  - services
+  - grubcfg
+  - initcpiocfg
+  - postcfg
+  - umountpartitions
+  - finished
+
+# Skip module if not needed
+skip:
+  - "welcome"
+  - "locale"
+  - "keyboard"
+  - "partition"
+  - "users"
+  - "summary"
+  - "finished"
+EOF
+
+# Branding
+cat > /etc/calamares/branding/universallite/branding.desc << 'EOF'
+# UniversalLite Calamares Branding
+
+componentName: "universallite"
+version: "1.0"
+license: "GPL-3.0-or-later"
+website: "https://universallite.os"
+supportUrl: "https://github.com/universallite/universallite/issues"
+bugReportUrl: "https://github.com/universallite/universallite/issues/new"
+
+strings:
+  productName: "UniversalLite OS"
+  shortProductName: "UniversalLite"
+  version: "1.0.0"
+  shortVersion: "1.0"
+  bootloaderEntryName: "UniversalLite OS"
+  productUrl: "https://universallite.os"
+
+slideshow: "slideshow.qml"
+style: "style.qml"
+
+applyCustomizations: true
+EOF
+
+# Slideshow
+cat > /etc/calamares/branding/universallite/slideshow.qml << 'EOF'
+import QtQuick 2.15
+import QtQuick.Controls 2.15
+
+Item {
+    id: root
+    property var model: [
+        {
+            title: "Welcome to UniversalLite OS",
+            description: "A super-fast, lightweight operating system that runs Windows and Android apps natively.",
+            icon: "preferences-system"
+        },
+        {
+            title: "Lightning Fast",
+            description: "Boots in under 20 seconds, uses 73-158 MB RAM idle. Optimized for 1 GB systems.",
+            icon: "preferences-system-time"
+        },
+        {
+            title: "Run Windows Apps",
+            description: "UniversalBridge runs .exe and .msi files via Wine + Box86/Box64 + DXVK/VKD3D.",
+            icon: "applications-other"
+        },
+        {
+            title: "Run Android Apps",
+            description: "Waydroid integration brings full Android app support with GPU acceleration.",
+            icon: "phone"
+        },
+        {
+            title: "Universal App Center",
+            description: "One place for Linux, Windows, Android, Flatpak, and web apps.",
+            icon: "system-software-install"
+        },
+        {
+            title: "Optional AI Assistant",
+            description: "Local or cloud AI that can manage your system - only runs when you need it.",
+            icon: "applications-science"
+        },
+        {
+            title: "Install Anywhere",
+            description: "Laptops, Raspberry Pi, USB drives, Fire TV, Android phones - one ISO fits all.",
+            icon: "drive-removable-media"
+        }
+    ]
+    
+    ListView {
+        anchors.fill: parent
+        model: root.model
+        delegate: Item {
+            width: ListView.view.width
+            height: ListView.view.height
+            
+            Column {
+                anchors.centerIn: parent
+                spacing: 24
+                
+                Image {
+                    source: "qrc:/icons/" + modelData.icon + ".svg"
+                    width: 128
+                    height: 128
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    fillMode: Image.PreserveAspectFit
+                }
+                
+                Text {
+                    text: modelData.title
+                    font.pixelSize: 28
+                    font.bold: true
+                    color: "#ffffff"
+                    horizontalAlignment: Text.AlignHCenter
+                    width: parent.width - 64
+                    wrapMode: Text.WordWrap
+                }
+                
+                Text {
+                    text: modelData.description
+                    font.pixelSize: 18
+                    color: "#cccccc"
+                    horizontalAlignment: Text.AlignHCenter
+                    width: parent.width - 64
+                    wrapMode: Text.WordWrap
+                }
+            }
+        }
+    }
+}
+EOF
+
+# Style
+cat > /etc/calamares/branding/universallite/style.qml << 'EOF'
+import QtQuick 2.15
+import QtQuick.Controls 2.15
+
+QtObject {
+    id: root
+    
+    property color backgroundColor: "#1e1e2e"
+    property color surfaceColor: "#282838"
+    property color primaryColor: "#89b4fa"
+    property color secondaryColor: "#f5c2e7"
+    property color textColor: "#cdd6f4"
+    property color textSecondaryColor: "#a6adc8"
+    property color borderColor: "#45475a"
+    property color successColor: "#a6e3a1"
+    property color warningColor: "#f9e2af"
+    property color errorColor: "#f38ba8"
+    
+    property font defaultFont: Qt.font({ family: "Cantarell", pixelSize: 14 })
+    property font headingFont: Qt.font({ family: "Cantarell", pixelSize: 24, bold: true })
+    property font titleFont: Qt.font({ family: "Cantarell", pixelSize: 32, bold: true })
+}
+EOF
+
+# Welcome Module
+cat > /etc/calamares/modules/welcome.conf << 'EOF'
+module: "welcome"
+title: "Welcome to UniversalLite OS"
+welcomeLabel: |
+  Welcome to the UniversalLite OS installer.
+
+  This will guide you through installing UniversalLite OS on your computer.
+
+  UniversalLite OS is a lightweight, fast operating system that can run
+  Windows applications (.exe, .msi) and Android apps (APK) alongside
+  native Linux applications.
+
+expandLabel: "Click Next to continue."
+
+buttons:
+  - label: "Release Notes"
+    url: "https://github.com/universallite/universallite/releases"
+  - label: "Documentation"
+    url: "https://github.com/universallite/universallite/wiki"
+  - label: "Report Issue"
+    url: "https://github.com/universallite/universallite/issues/new"
+EOF
+
+# Locale Module
+cat > /etc/calamares/modules/locale.conf << 'EOF'
+module: "locale"
+title: "Language and Region"
+requiredStorage: "10MB"
+localeGenCommand: "/usr/sbin/locale-gen"
+timeZoneMap: "/usr/share/calamares/modules/locale/timezone.json"
+useGeoIP: true
+geoIPProvider: "https://ipapi.co/json/"
+geoIPTimeout: 10
+showLanguage: true
+showRegion: true
+showTimezone: true
+applySystemLocale: true
+applyUserLocale: true
+EOF
+
+# Keyboard Module
+cat > /etc/calamares/modules/keyboard.conf << 'EOF'
+module: "keyboard"
+title: "Keyboard Layout"
+layoutsPath: "/usr/share/calamares/modules/keyboard/layouts"
+model: "pc105"
+variant: ""
+options: "ctrl:nocaps"
+setXkbmap: true
+applyToSystem: true
+applyToUser: true
+EOF
+
+# Partition Module (Advanced)
+cat > /etc/calamares/modules/partition.conf << 'EOF'
+module: "partition"
+title: "Disk Partitioning"
+backend: "kpmcore"
+
+# Safety
+confirmText: "This will erase all data on the selected disk. Are you sure?"
+showAdvanced: true
+
+# Default partitioning schemes
+schemes:
+  - id: "auto"
+    name: "Erase disk (recommended)"
+    description: "Automatically partition the entire disk with optimal layout"
+    default: true
+    partitions:
+      - mountPoint: "/boot/efi"
+        fsType: "fat32"
+        size: "512M"
+        flags: ["esp", "boot"]
+        label: "ESP"
+      - mountPoint: "/"
+        fsType: "erofs"
+        size: "100%"
+        compression: "zstd"
+        label: "ROOT"
+
+  - id: "auto-btrfs"
+    name: "Erase disk (Btrfs with snapshots)"
+    description: "Btrfs root with snapshots for easy rollback"
+    partitions:
+      - mountPoint: "/boot/efi"
+        fsType: "fat32"
+        size: "512M"
+        flags: ["esp", "boot"]
+        label: "ESP"
+      - mountPoint: "/"
+        fsType: "btrfs"
+        size: "100%"
+        options: "compress=zstd,noatime"
+        subvolumes:
+          - "@"
+          - "@home"
+          - "@var_log"
+          - "@snapshots"
+        label: "ROOT"
+
+  - id: "manual"
+    name: "Manual partitioning"
+    description: "Manually create, resize, and configure partitions"
+    partitions: []
+
+# Filesystem options
+fsTypes:
+  - "ext4"
+  - "btrfs"
+  - "erofs"
+  - "f2fs"
+  - "xfs"
+  - "fat32"
+  - "ntfs"
+  - "swap"
+
+# LUKS encryption
+luks:
+  enabled: true
+  defaultCipher: "aes-xts-plain64"
+  defaultKeySize: 512
+  defaultHash: "sha256"
+  pbkdf: "argon2id"
+  pbkdfIterations: 4
+
+# LVM
+lvm:
+  enabled: true
+  defaultVGName: "universallite"
+
+# RAID
+raid:
+  enabled: false
+EOF
+
+# Users Module
+cat > /etc/calamares/modules/users.conf << 'EOF'
+module: "users"
+title: "User Setup"
+
+# User
+defaultGroups: "wheel,network,video,audio,optical,storage,scanner,lp,input,kvm,render"
+autologinGroup: "autologin"
+sudoersGroup: "wheel"
+sudoersFile: "/etc/sudoers.d/calamares"
+setRootPassword: false
+useRootPassword: false
+rootPassword: ""
+userShell: "/bin/bash"
+
+# Avatars
+avatarPath: "/usr/share/calamares/modules/users/avatars"
+useAvatarFromGravatar: false
+
+# Password
+passwordStrength: "medium"
+allowEmptyPassword: false
+requirePassword: true
+passwordHint: "Use a strong password you can remember"
+
+# Real name
+realNameRequired: true
+
+# Hostname
+hostnameRequired: true
+hostnameDefault: "universallite"
+EOF
+
+# Summary Module
+cat > /etc/calamares/modules/summary.conf << 'EOF'
+module: "summary"
+title: "Installation Summary"
+showInstallLog: true
+showInstallOutput: true
+showInstallCommand: true
+EOF
+
+# Mount Partitions Module
+cat > /etc/calamares/modules/mountpartitions.conf << 'EOF'
+module: "mountpartitions"
+mountRootFirst: true
+mountOptions: "defaults,noatime"
+mountHome: true
+mountBoot: true
+mountEFI: true
+swapResume: true
+EOF
+
+# Unpack FS Module (eroFS support)
+cat > /etc/calamares/modules/unpackfs.conf << 'EOF'
+module: "unpackfs"
+source: "/live/filesystem.sfs"
+destination: "/target"
+compress: "erofs"
+compressOptions: "-z zstd,19"
+showProgress: true
+showTime: true
+EOF
+
+# Machine ID Module
+cat > /etc/calamares/modules/machineid.conf << 'EOF'
+module: "machineid"
+generate: true
+EOF
+
+# FSTAB Module
+cat > /etc/calamares/modules/fstab.conf << 'EOF'
+module: "fstab"
+options: "defaults,noatime"
+swapOptions: "defaults,noatime"
+rootOptions: "defaults,noatime,ro"
+generateUUID: true
+EOF
+
+# Display Manager Module
+cat > /etc/calamares/modules/displaymanager.conf << 'EOF'
+module: "displaymanager"
+displaymanagers:
+  - "sddm"
+  - "lightdm"
+  - "gdm"
+defaultDisplayManager: "sddm"
+autoLogin: true
+autoLoginUser: "@user@"
+EOF
+
+# Bootloader Module (Universal)
+cat > /etc/calamares/modules/bootloader.conf << 'EOF'
+module: "bootloader"
+title: "Bootloader Installation"
+
+# GRUB
+grubInstall: true
+grubInstallOptions: "--recheck --no-floppy"
+grubTimeout: 5
+grubTimeoutStyle: "menu"
+grubDistributor: "UniversalLite"
+grubTheme: "/boot/grub/themes/universallite/theme.txt"
+grubDefaultEntry: "UniversalLite OS"
+grubCmdline: "quiet splash systemd.show_status=0 rd.udev.log_level=3"
+grubCmdlineDefault: "quiet splash systemd.show_status=0 rd.udev.log_level=3"
+
+# EFI
+efiBootloaderId: "UniversalLite"
+efiDirectory: "/boot/efi"
+efiVariables: true
+secureBoot: true
+
+# BIOS
+biosBootDirectory: "/boot/grub"
+
+# Detect other OSes
+osProber: true
+probeForeignOS: true
+
+# Kernel
+kernelPath: "/boot/vmlinuz"
+initrdPath: "/boot/initrd.img"
+
+# ARM
+armBootloader: "u-boot"
+rpiBootloader: true
+EOF
+
+# Network Config Module
+cat > /etc/calamares/modules/networkcfg.conf << 'EOF'
+module: "networkcfg"
+title: "Network Configuration"
+
+# systemd-networkd
+useSystemdNetworkd: true
+useNetworkManager: true
+useIwd: true
+copyNetworkConfig: true
+generateHostname: true
+hostname: "universallite"
+EOF
+
+# Services Module
+cat > /etc/calamares/modules/services.conf << 'EOF'
+module: "services"
+title: "System Services"
+
+# Services to enable by default
+systemd:
+  - systemd-networkd
+  - systemd-resolved
+  - systemd-timesyncd
+  - systemd-zram-setup@zram0
+  - fstrim.timer
+  - plymouth-start
+  - sddm
+
+# User services
+userServices:
+  - pipewire
+  - pipewire-pulse
+  - wireplumber
+  - bluetooth
+  - universalbridge-daemon
+  - waydroid-container
+  - universal-appcenter-updates.timer
+  - universal-ai.socket
+EOF
+
+# GRUB Config Module
+cat > /etc/calamares/modules/grubcfg.conf << 'EOF'
+module: "grubcfg"
+title: "GRUB Configuration"
+
+grubConfig: "/etc/default/grub"
+grubTimeout: 5
+grubTimeoutStyle: "menu"
+grubDefault: "saved"
+grubSaveDefault: true
+grubDistributor: "UniversalLite"
+grubCmdline: "quiet splash systemd.show_status=0 rd.udev.log_level=3"
+grubCmdlineDefault: "quiet splash systemd.show_status=0 rd.udev.log_level=3"
+grubTheme: "/boot/grub/themes/universallite/theme.txt"
+grubGfxMode: "auto"
+grubGfxPayload: "keep"
+grubDisableRecovery: true
+grubDisableSubmenu: true
+grubEnableBlscfg: true
+grubSerialConsole: false
+EOF
+
+# Initcpio Config Module (for mkinitcpio if used)
+cat > /etc/calamares/modules/initcpiocfg.conf << 'EOF'
+module: "initcpiocfg"
+title: "Initramfs Configuration"
+
+# For dracut (Debian default)
+useDracut: true
+dracutConfig: "/etc/dracut.conf.d/universallite.conf"
+dracutModules: "base systemd udev-rules dracut-systemd crypt dm rootfs-block terminfo udev-rules biosdevname fs-lib shutdown udev-rules"
+dracutAddDrivers: "virtio_blk virtio_scsi virtio_net nvme ahci sd_mod usb_storage xhci_hcd ehci_hcd uhci_hcd"
+dracutForceDrivers: ""
+dracutOmitDrivers: "floppy pata_acpi"
+dracutCompress: "zstd"
+dracutHostOnly: true
+dracutHostOnlyCmdline: true
+dracutNoHostOnly: false
+EOF
+
+# Post Config Module
+cat > /etc/calamares/modules/postcfg.conf << 'EOF'
+module: "postcfg"
+title: "Post-Installation Configuration"
+
+# Scripts to run after installation
+scripts:
+  - "/usr/lib/calamares/modules/postcfg/post-install.sh"
+
+# Chroot scripts
+chrootScripts:
+  - "/usr/lib/calamares/modules/postcfg/chroot-setup.sh"
+
+# Systemd firstboot
+systemdFirstBoot: true
+firstBootLocale: true
+firstBootTimezone: true
+firstBootKeyboard: true
+firstBootHostname: true
+firstBootMachineId: true
+EOF
+
+# Post-install script
+mkdir -p /usr/lib/calamares/modules/postcfg
+cat > /usr/lib/calamares/modules/postcfg/post-install.sh << 'EOF'
+#!/bin/bash
+# Post-installation script (runs in live environment)
+
+set -euo pipefail
+
+TARGET="/target"
+
+echo "Running post-installation tasks..."
+
+# Copy live user config to installed system
+if [[ -d "/home/universalite" ]]; then
+    cp -r /home/universalite/.config/* "$TARGET/home/universalite/.config/" 2>/dev/null || true
+    cp -r /home/universalite/.local/* "$TARGET/home/universalite/.local/" 2>/dev/null || true
+fi
+
+# Set up automatic login for live user (if requested)
+if [[ -f "$TARGET/etc/sddm.conf.d/autologin.conf" ]]; then
+    sed -i "s/User=.*/User=universalite/" "$TARGET/etc/sddm.conf.d/autologin.conf"
+fi
+
+# Enable services
+systemctl --root="$TARGET" enable systemd-networkd systemd-resolved systemd-timesyncd 2>/dev/null || true
+systemctl --root="$TARGET" enable systemd-zram-setup@zram0 2>/dev/null || true
+systemctl --root="$TARGET" enable fstrim.timer 2>/dev/null || true
+
+# Set up Plymouth theme
+plymouth-set-default-theme --root="$TARGET" universallite -R 2>/dev/null || true
+
+# Update initramfs
+chroot "$TARGET" update-initramfs -u -k all 2>/dev/null || true
+
+# Update GRUB
+chroot "$TARGET" update-grub 2>/dev/null || true
+
+# Set up Flatpak
+chroot "$TARGET" flatpak remote-add --if-not-exists --system flathub https://flathub.org/repo/flathub.flatpakrepo 2>/dev/null || true
+
+# Clean up
+chroot "$TARGET" apt-get clean 2>/dev/null || true
+rm -rf "$TARGET/var/lib/apt/lists/*" 2>/dev/null || true
+rm -rf "$TARGET/tmp/*" 2>/dev/null || true
+
+echo "Post-installation complete"
+EOF
+chmod +x /usr/lib/calamares/modules/postcfg/post-install.sh
+
+# Chroot setup script
+cat > /usr/lib/calamares/modules/postcfg/chroot-setup.sh << 'EOF'
+#!/bin/bash
+# Chroot setup script (runs in installed system)
+
+set -euo pipefail
+
+echo "Running chroot setup..."
+
+# Generate locales
+locale-gen en_US.UTF-8 2>/dev/null || true
+
+# Generate fstab
+genfstab -U / >> /etc/fstab 2>/dev/null || true
+
+# Update font cache
+fc-cache -f 2>/dev/null || true
+
+# Update desktop database
+update-desktop-database 2>/dev/null || true
+
+# Update MIME database
+update-mime-database /usr/share/mime 2>/dev/null || true
+
+# Update icon cache
+gtk-update-icon-cache -f /usr/share/icons/hicolor 2>/dev/null || true
+
+# Set up UniversalLite profile
+echo "balanced" > /etc/universallite/current-profile
+
+# Enable user services
+systemctl --global enable pipewire pipewire-pulse wireplumber 2>/dev/null || true
+systemctl --global enable bluetooth 2>/dev/null || true
+systemctl --global enable universalbridge-daemon 2>/dev/null || true
+systemctl --global enable waydroid-container 2>/dev/null || true
+systemctl --global enable universal-appcenter-updates.timer 2>/dev/null || true
+systemctl --global enable universal-ai.socket 2>/dev/null || true
+
+echo "Chroot setup complete"
+EOF
+chmod +x /usr/lib/calamares/modules/postcfg/chroot-setup.sh
+
+# Umount Partitions Module
+cat > /etc/calamares/modules/umountpartitions.conf << 'EOF'
+module: "umountpartitions"
+unmountAll: true
+EOF
+
+# Finished Module
+cat > /etc/calamares/modules/finished.conf << 'EOF'
+module: "finished"
+title: "Installation Complete"
+
+message: |
+  UniversalLite OS has been successfully installed!
+
+  You can now restart your computer and enjoy your new operating system.
+
+  <b>Next steps:</b>
+  <ul>
+    <li>Remove the installation media</li>
+    <li>Press "Restart Now" to boot into UniversalLite OS</li>
+    <li>Log in with the username and password you created</li>
+  </ul>
+
+  <b>Getting started:</b>
+  <ul>
+    <li>Open the <b>Universal App Center</b> to install applications</li>
+    <li>Run <b>Windows apps</b> by double-clicking .exe files</li>
+    <li>Install <b>Android apps</b> via Waydroid</li>
+    <li>Try the <b>Universal AI</b> assistant with <tt>ul-ai "your question"</tt></li>
+  </ul>
+
+restartNow: true
+restartLabel: "Restart Now"
+restartCommand: "systemctl reboot"
+EOF
+
+# GRUB Theme
+mkdir -p /boot/grub/themes/universallite
+cat > /boot/grub/themes/universallite/theme.txt << 'EOF'
+# UniversalLite GRUB Theme
+
+title-text: "UniversalLite OS"
+title-font: "Cantarell Bold 24"
+title-color: "#89b4fa"
+title-x: "50%"
+title-y: "10%"
+title-align: "center"
+
+desktop-image: "background.png"
+desktop-color: "#1e1e2e"
+
+terminal-box: "terminal_box_*.png"
+terminal-font: "JetBrains Mono 12"
+terminal-border: "20"
+terminal-left: "10%"
+terminal-top: "20%"
+terminal-width: "80%"
+terminal-height: "60%"
+terminal-color: "#1e1e2e"
+terminal-border-color: "#45475a"
+
+boot-menu-item: "menu_*.png"
+boot-menu-item-selected: "menu_selected_*.png"
+item-font: "Cantarell 16"
+item-color: "#cdd6f4"
+item-selected-color: "#1e1e2e"
+item-height: "40"
+item-padding: "10"
+item-spacing: "5"
+item-icon-space: "40"
+
+menu-position: "center"
+menu-width: "60%"
+menu-height: "50%"
+
+progress-bar: "progress_*.png"
+progress-bar-id: "progress_*.png"
+progress-frame: "progress_frame_*.png"
+progress-frame-id: "progress_frame_*.png"
+progress-x: "20%"
+progress-y: "85%"
+progress-width: "60%"
+progress-height: "20"
+
+progress-bar-color: "#89b4fa"
+progress-text-color: "#cdd6f4"
+progress-font: "Cantarell 14"
+
+label-color: "#a6adc8"
+label-font: "Cantarell 12"
+
+scrollbar: "scrollbar_*.png"
+scrollbar-thumb: "scrollbar_thumb_*.png"
+scrollbar-width: "10"
+
+# Hotkeys
+hotkey-color: "#f5c2e7"
+hotkey-font: "Cantarell Bold 16"
+EOF
+
+# Copy theme assets (placeholder - would need actual images)
+# In production, these would be real PNG files
+mkdir -p /boot/grub/themes/universallite/icons
+
+# Desktop Entry for Installer
+mkdir -p /usr/share/applications
+cat > /usr/share/applications/universallite-installer.desktop << 'EOF'
+[Desktop Entry]
+Type=Application
+Name=Install UniversalLite OS
+GenericName=OS Installer
+Comment=Install UniversalLite OS to your computer
+Exec=pkexec calamares -d
+Icon=universallite-installer
+Terminal=false
+Categories=System;Settings;
+StartupNotify=true
+OnlyShowIn=UniversalLite;
+EOF
+
+# PolicyKit rule for installer
+mkdir -p /etc/polkit-1/rules.d
+cat > /etc/polkit-1/rules.d/49-universallite-installer.rules << 'EOF'
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.freedesktop.policykit.exec" &&
+        action.lookup("program") == "/usr/bin/calamares") {
+        return polkit.Result.YES;
+    }
+});
+EOF
+
+# Calamares Modules Directory Symlink
+ln -sf /etc/calamares/modules /usr/share/calamares/modules
+
+echo "=== UniversalLite Installer installation complete ==="

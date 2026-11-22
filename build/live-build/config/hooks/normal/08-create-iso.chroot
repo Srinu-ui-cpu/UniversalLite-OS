@@ -1,0 +1,218 @@
+#!/bin/bash
+# Hook: 08-create-iso
+# Create bootable ISO with UEFI + BIOS support
+
+set -euo pipefail
+
+echo "=== Creating UniversalLite ISO ==="
+
+# This hook runs in the chroot, but ISO creation happens outside
+# We'll prepare the necessary files for xorriso/grub
+
+# Install bootloader packages
+apt-get update
+apt-get install -y --no-install-recommends \
+    grub-efi-amd64 \
+    grub-efi-arm64 \
+    grub-pc \
+    grub-pc-bin \
+    shim-signed \
+    shim-helpers-amd64-signed \
+    shim-helpers-arm64-signed \
+    xorriso \
+    isolinux \
+    syslinux-common \
+    syslinux-efi \
+    dosfstools \
+    mtools \
+    efibootmgr
+
+# GRUB Configuration for Live Boot
+mkdir -p /boot/grub
+cat > /boot/grub/grub.cfg << 'EOF'
+# UniversalLite GRUB Configuration
+set timeout=10
+set default=0
+
+# Theme
+insmod gfxterm
+insmod png
+set gfxmode=auto
+set gfxpayload=keep
+terminal_output gfxterm
+
+# Colors
+set color_normal=white/black
+set color_highlight=black/light-gray
+
+# Menu entries
+menuentry "UniversalLite OS (Live)" --class universallite --class gnu-linux --class gnu --class os {
+    linux /live/vmlinuz boot=live components quiet splash systemd.show_status=0 rd.udev.log_level=3
+    initrd /live/initrd.img
+}
+
+menuentry "UniversalLite OS (Live - Ultra Lite Profile)" --class universallite --class gnu-linux --class gnu --class os {
+    linux /live/vmlinuz boot=live components quiet splash systemd.show_status=0 rd.udev.log_level=3 universalite.profile=ultra-lite
+    initrd /live/initrd.img
+}
+
+menuentry "UniversalLite OS (Live - Performance Profile)" --class universallite --class gnu-linux --class gnu --class os {
+    linux /live/vmlinuz boot=live components quiet splash systemd.show_status=0 rd.udev.log_level=3 universalite.profile=performance
+    initrd /live/initrd.img
+}
+
+menuentry "UniversalLite OS (Install)" --class universallite --class gnu-linux --class gnu --class os {
+    linux /live/vmlinuz boot=live components quiet splash systemd.show_status=0 rd.udev.log_level=3 install=true
+    initrd /live/initrd.img
+}
+
+menuentry "UniversalLite OS (Safe Mode)" --class universallite --class gnu-linux --class gnu --class os {
+    linux /live/vmlinuz boot=live components nomodeset xforcevesa quiet
+    initrd /live/initrd.img
+}
+
+submenu "Advanced Options" {
+    menuentry "UniversalLite OS (Live - Debug)" --class universallite --class gnu-linux --class gnu --class os {
+        linux /live/vmlinuz boot=live components debug systemd.log_level=debug
+        initrd /live/initrd.img
+    }
+    
+    menuentry "UniversalLite OS (Live - No ZRAM)" --class universallite --class gnu-linux --class gnu --class os {
+        linux /live/vmlinuz boot=live components quiet splash zram.enabled=0
+        initrd /live/initrd.img
+    }
+    
+    menuentry "Memory Test (memtest86+)" {
+        linux16 /live/memtest
+    }
+}
+
+# UEFI Shell
+if [ -f /EFI/shellx64.efi ]; then
+    menuentry "UEFI Shell" {
+        chainloader /EFI/shellx64.efi
+    }
+fi
+
+# Reboot / Shutdown
+menuentry "Reboot" {
+    reboot
+}
+
+menuentry "Shutdown" {
+    halt
+}
+EOF
+
+# GRUB EFI Standalone Configuration
+cat > /boot/grub/grub-efi.cfg << 'EOF'
+# UniversalLite GRUB EFI Standalone Config
+search --set=root --file /live/vmlinuz
+set prefix=($root)/boot/grub
+configfile /boot/grub/grub.cfg
+EOF
+
+# Create GRUB EFI Standalone Image (for UEFI boot)
+# This will be built by the outer build script
+
+# Syslinux Configuration (BIOS fallback)
+mkdir -p /boot/syslinux
+cat > /boot/syslinux/syslinux.cfg << 'EOF'
+UI menu.c32
+PROMPT 0
+MENU TITLE UniversalLite OS Boot Menu
+TIMEOUT 100
+DEFAULT live
+
+MENU COLOR border       30;44   #40ffffff #a0000000 std
+MENU COLOR title        1;36;44 #9033ccff #a0000000 std
+MENU COLOR sel          7;37;40 #e0ffffff #20ffffff all
+MENU COLOR unsel        37;44   #50ffffff #a0000000 std
+
+LABEL live
+    MENU LABEL UniversalLite OS (Live)
+    LINUX /live/vmlinuz
+    INITRD /live/initrd.img
+    APPEND boot=live components quiet splash systemd.show_status=0 rd.udev.log_level=3
+
+LABEL live-ultra
+    MENU LABEL UniversalLite OS (Live - Ultra Lite)
+    LINUX /live/vmlinuz
+    INITRD /live/initrd.img
+    APPEND boot=live components quiet splash systemd.show_status=0 rd.udev.log_level=3 universalite.profile=ultra-lite
+
+LABEL live-performance
+    MENU LABEL UniversalLite OS (Live - Performance)
+    LINUX /live/vmlinuz
+    INITRD /live/initrd.img
+    APPEND boot=live components quiet splash systemd.show_status=0 rd.udev.log_level=3 universalite.profile=performance
+
+LABEL install
+    MENU LABEL UniversalLite OS (Install)
+    LINUX /live/vmlinuz
+    INITRD /live/initrd.img
+    APPEND boot=live components quiet splash systemd.show_status=0 rd.udev.log_level=3 install=true
+
+LABEL safe
+    MENU LABEL UniversalLite OS (Safe Mode)
+    LINUX /live/vmlinuz
+    INITRD /live/initrd.img
+    APPEND boot=live components nomodeset xforcevesa quiet
+
+MENU SEPARATOR
+
+LABEL memtest
+    MENU LABEL Memory Test (memtest86+)
+    LINUX /live/memtest
+
+LABEL reboot
+    MENU LABEL Reboot
+    COM32 reboot.c32
+
+LABEL poweroff
+    MENU LABEL Shutdown
+    COM32 poweroff.c32
+EOF
+
+# Copy syslinux modules
+cp /usr/lib/syslinux/modules/bios/*.c32 /boot/syslinux/ 2>/dev/null || true
+cp /usr/lib/ISOLINUX/isolinux.bin /boot/syslinux/ 2>/dev/null || true
+cp /usr/lib/syslinux/modules/bios/ldlinux.c32 /boot/syslinux/ 2>/dev/null || true
+
+# EFI Boot Structure
+mkdir -p /boot/efi/EFI/BOOT
+mkdir -p /boot/efi/EFI/universallite
+
+# Create EFI boot entries (will be populated by build script)
+
+# Version Info
+cat > /etc/universallite/version << 'EOF'
+UNIVERSALITE_VERSION=1.0.0-dev
+UNIVERSALITE_CODENAME=foundation
+UNIVERSALITE_BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+UNIVERSALITE_GIT_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
+UNIVERSALITE_ARCH=$(dpkg --print-architecture)
+UNIVERSALITE_VARIANT=$(cat /etc/universallite/current-profile 2>/dev/null || echo "balanced")
+EOF
+
+# Build Info
+cat > /etc/universallite/build-info << 'EOF'
+BUILD_SYSTEM=Debian Trixie
+BUILD_TOOL=live-build
+BUILD_KERNEL=$(uname -r)
+BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+BUILD_ARCH=$(dpkg --print-architecture)
+BUILD_VARIANT=$(cat /etc/universallite/current-profile 2>/dev/null || echo "balanced")
+EOF
+
+# Signing Keys Placeholder (for Secure Boot)
+mkdir -p /etc/universallite/keys
+# These would be populated at build time with actual keys
+# /etc/universallite/keys/db.crt
+# /etc/universallite/keys/db.key
+# /etc/universallite/keys/kek.crt
+# /etc/universallite/keys/kek.key
+# /etc/universallite/keys/pk.crt
+# /etc/universallite/keys/pk.key
+
+echo "=== ISO preparation complete ==="

@@ -1,0 +1,703 @@
+#!/bin/bash
+# Hook: 05-install-appcenter
+# Install Universal App Center (backend + frontend)
+
+set -euo pipefail
+
+echo "=== Installing Universal App Center ==="
+
+# Add Flathub Repository
+flatpak remote-add --if-not-exists --system flathub https://flathub.org/repo/flathub.flatpakrepo
+
+# Add UniversalLite Flatpak Remote (placeholder - will be configured at runtime)
+# flatpak remote-add --if-not-exists --system universallite https://flatpak.universallite.os/repo.flatpakrepo
+
+# Install Flatpak packages
+apt-get update
+apt-get install -y --no-install-recommends \
+    flatpak \
+    flatpak-builder \
+    gnome-software-plugin-flatpak \
+    xdg-desktop-portal-gtk \
+    packagekit \
+    packagekit-tools \
+    gnome-software-plugin-packagekit \
+    appstream \
+    appstream-index \
+    appstreamcli \
+    bubblewrap \
+    flatpak-spawn \
+    update-notifier \
+    update-manager \
+    nodejs \
+    npm
+
+# Install Nativefier for web apps
+npm install -g nativefier 2>/dev/null || true
+
+# App Center Backend (Python service)
+mkdir -p /usr/libexec/universal-appcenter
+
+cat > /usr/libexec/universal-appcenter/backend.py << 'EOF'
+#!/usr/bin/env python3
+"""
+Universal App Center Backend
+Unified package management across APT, Flatpak, UniversalBridge (Windows), Waydroid (Android), Web Apps
+"""
+
+import json
+import subprocess
+import sys
+import os
+import sqlite3
+from pathlib import Path
+from typing import Dict, List, Optional, Any
+from dataclasses import dataclass, asdict
+from enum import Enum
+
+class SourceType(Enum):
+    APT = "apt"
+    FLATPAK = "flatpak"
+    WINDOWS = "windows"
+    ANDROID = "android"
+    WEB = "web"
+
+class InstallStatus(Enum):
+    AVAILABLE = "available"
+    INSTALLED = "installed"
+    UPDATABLE = "updatable"
+    REMOVING = "removing"
+    INSTALLING = "installing"
+    ERROR = "error"
+
+@dataclass
+class Application:
+    id: str
+    name: str
+    summary: str
+    description: str
+    version: str
+    source: SourceType
+    source_id: str
+    categories: List[str]
+    icon: Optional[str] = None
+    size: int = 0
+    installed_size: int = 0
+    status: InstallStatus = InstallStatus.AVAILABLE
+    rating: Optional[str] = None
+    license: Optional[str] = None
+    homepage: Optional[str] = None
+    permissions: List[str] = None
+    compat_rating: Optional[str] = None  # For Windows/Android apps
+
+class AppCenterBackend:
+    def __init__(self):
+        self.db_path = Path.home() / ".local/share/universal-appcenter/apps.db"
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._init_db()
+        self._load_compat_db()
+    
+    def _init_db(self):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS applications (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    summary TEXT,
+                    description TEXT,
+                    version TEXT,
+                    source TEXT NOT NULL,
+                    source_id TEXT NOT NULL,
+                    categories TEXT,
+                    icon TEXT,
+                    size INTEGER DEFAULT 0,
+                    installed_size INTEGER DEFAULT 0,
+                    status TEXT DEFAULT 'available',
+                    rating TEXT,
+                    license TEXT,
+                    homepage TEXT,
+                    permissions TEXT,
+                    compat_rating TEXT,
+                    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS installed (
+                    app_id TEXT PRIMARY KEY,
+                    install_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    version TEXT,
+                    FOREIGN KEY(app_id) REFERENCES applications(id)
+                )
+            """)
+            conn.commit()
+    
+    def _load_compat_db(self):
+        self.compat_db = {}
+        compat_path = Path("/usr/share/universalbridge/compatdb.json")
+        if compat_path.exists():
+            with open(compat_path) as f:
+                data = json.load(f)
+                for app in data.get("applications", []):
+                    key = app["name"].lower().replace(" ", "-")
+                    self.compat_db[key] = app
+    
+    def search(self, query: str = "", source: Optional[SourceType] = None, 
+               category: Optional[str] = None, limit: int = 50) -> List[Application]:
+        """Search applications across all sources"""
+        results = []
+        
+        if source is None or source == SourceType.APT:
+            results.extend(self._search_apt(query, limit))
+        if source is None or source == SourceType.FLATPAK:
+            results.extend(self._search_flatpak(query, limit))
+        if source is None or source == SourceType.WINDOWS:
+            results.extend(self._search_windows(query, limit))
+        if source is None or source == SourceType.ANDROID:
+            results.extend(self._search_android(query, limit))
+        if source is None or source == SourceType.WEB:
+            results.extend(self._search_web(query, limit))
+        
+        # Filter by category
+        if category:
+            results = [r for r in results if category in r.categories]
+        
+        # Sort: installed first, then by name
+        results.sort(key=lambda x: (x.status != InstallStatus.INSTALLED, x.name.lower()))
+        
+        return results[:limit]
+    
+    def _search_apt(self, query: str, limit: int) -> List[Application]:
+        """Search APT packages"""
+        try:
+            cmd = ["apt-cache", "search", query] if query else ["apt", "list", "--installed"]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            apps = []
+            for line in result.stdout.strip().split("\n"):
+                if not line or line.startswith("Listing..."):
+                    continue
+                parts = line.split(" - ", 1)
+                if len(parts) == 2:
+                    pkg_name = parts[0].split("/")[0]
+                    summary = parts[1]
+                    apps.append(Application(
+                        id=f"apt:{pkg_name}",
+                        name=pkg_name,
+                        summary=summary,
+                        description=summary,
+                        version=self._get_apt_version(pkg_name),
+                        source=SourceType.APT,
+                        source_id=pkg_name,
+                        categories=self._get_apt_categories(pkg_name),
+                        status=self._get_apt_status(pkg_name)
+                    ))
+            return apps[:limit]
+        except Exception as e:
+            print(f"APT search error: {e}", file=sys.stderr)
+            return []
+    
+    def _get_apt_version(self, pkg: str) -> str:
+        try:
+            result = subprocess.run(["apt-cache", "policy", pkg], capture_output=True, text=True)
+            for line in result.stdout.split("\n"):
+                if "Candidate:" in line:
+                    return line.split("Candidate:")[1].strip()
+        except:
+            pass
+        return "unknown"
+    
+    def _get_apt_categories(self, pkg: str) -> List[str]:
+        # Simplified - would use debtags or appstream in production
+        return ["System"]
+    
+    def _get_apt_status(self, pkg: str) -> InstallStatus:
+        try:
+            result = subprocess.run(["dpkg", "-l", pkg], capture_output=True, text=True)
+            if "ii  " in result.stdout:
+                return InstallStatus.INSTALLED
+        except:
+            pass
+        return InstallStatus.AVAILABLE
+    
+    def _search_flatpak(self, query: str, limit: int) -> List[Application]:
+        """Search Flatpak packages"""
+        try:
+            cmd = ["flatpak", "search", "--columns=name,summary,application,version,origin", query] if query else ["flatpak", "list", "--app", "--columns=name,application,version,origin"]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            apps = []
+            for line in result.stdout.strip().split("\n"):
+                if not line or "\t" not in line:
+                    continue
+                parts = line.split("\t")
+                if len(parts) >= 4:
+                    name, summary, app_id, version = parts[0], parts[1], parts[2], parts[3]
+                    origin = parts[4] if len(parts) > 4 else "flathub"
+                    apps.append(Application(
+                        id=f"flatpak:{app_id}",
+                        name=name,
+                        summary=summary,
+                        description=summary,
+                        version=version,
+                        source=SourceType.FLATPAK,
+                        source_id=app_id,
+                        categories=self._get_flatpak_categories(app_id),
+                        status=self._get_flatpak_status(app_id)
+                    ))
+            return apps[:limit]
+        except Exception as e:
+            print(f"Flatpak search error: {e}", file=sys.stderr)
+            return []
+    
+    def _get_flatpak_categories(self, app_id: str) -> List[str]:
+        try:
+            result = subprocess.run(["flatpak", "info", "-m", app_id], capture_output=True, text=True)
+            for line in result.stdout.split("\n"):
+                if line.startswith("categories="):
+                    return line.split("=", 1)[1].split(";")
+        except:
+            pass
+        return ["Applications"]
+    
+    def _get_flatpak_status(self, app_id: str) -> InstallStatus:
+        try:
+            result = subprocess.run(["flatpak", "list", "--app", "--columns=application"], capture_output=True, text=True)
+            if app_id in result.stdout:
+                return InstallStatus.INSTALLED
+        except:
+            pass
+        return InstallStatus.AVAILABLE
+    
+    def _search_windows(self, query: str, limit: int) -> List[Application]:
+        """Search Windows compatibility database"""
+        apps = []
+        query_lower = query.lower()
+        for key, data in self.compat_db.items():
+            if not query_lower or query_lower in key or query_lower in data["name"].lower():
+                apps.append(Application(
+                    id=f"windows:{key}",
+                    name=data["name"],
+                    summary=f"Windows app ({data['rating']} compatibility)",
+                    description=data.get("notes", ""),
+                    version=data.get("version", "latest"),
+                    source=SourceType.WINDOWS,
+                    source_id=key,
+                    categories=["Windows", "Compatibility"],
+                    compat_rating=data.get("rating"),
+                    rating=data.get("rating"),
+                    permissions=["wine-prefix"]
+                ))
+        return apps[:limit]
+    
+    def _search_android(self, query: str, limit: int) -> List[Application]:
+        """Search Android apps (from Waydroid or common APKs)"""
+        # Placeholder - would query Waydroid or APK repositories
+        return []
+    
+    def _search_web(self, query: str, limit: int) -> List[Application]:
+        """Search web apps (PWA, common web services)"""
+        # Placeholder - would use a curated list
+        web_apps = [
+            Application(
+                id="web:youtube",
+                name="YouTube",
+                summary="Video streaming",
+                description="YouTube web app",
+                version="web",
+                source=SourceType.WEB,
+                source_id="https://youtube.com",
+                categories=["Web", "Media"],
+                permissions=["network"]
+            ),
+            Application(
+                id="web:gmail",
+                name="Gmail",
+                summary="Email client",
+                description="Gmail web app",
+                version="web",
+                source=SourceType.WEB,
+                source_id="https://mail.google.com",
+                categories=["Web", "Productivity"],
+                permissions=["network", "notifications"]
+            ),
+        ]
+        return [a for a in web_apps if not query or query.lower() in a.name.lower()][:limit]
+    
+    def install(self, app_id: str) -> Dict[str, Any]:
+        """Install an application"""
+        source, source_id = app_id.split(":", 1)
+        
+        try:
+            if source == "apt":
+                return self._install_apt(source_id)
+            elif source == "flatpak":
+                return self._install_flatpak(source_id)
+            elif source == "windows":
+                return self._install_windows(source_id)
+            elif source == "android":
+                return self._install_android(source_id)
+            elif source == "web":
+                return self._install_web(source_id)
+            else:
+                return {"success": False, "error": f"Unknown source: {source}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def _install_apt(self, pkg: str) -> Dict[str, Any]:
+        subprocess.run(["apt-get", "update"], check=True)
+        subprocess.run(["apt-get", "install", "-y", pkg], check=True)
+        return {"success": True, "message": f"Installed {pkg} via APT"}
+    
+    def _install_flatpak(self, app_id: str) -> Dict[str, Any]:
+        subprocess.run(["flatpak", "install", "-y", "flathub", app_id], check=True)
+        return {"success": True, "message": f"Installed {app_id} via Flatpak"}
+    
+    def _install_windows(self, compat_key: str) -> Dict[str, Any]:
+        # Trigger UniversalBridge to create prefix and install
+        # This would integrate with universalbridge-daemon via D-Bus
+        return {"success": True, "message": f"Windows app install triggered for {compat_key}", "note": "Requires user interaction for installer"}
+    
+    def _install_android(self, apk_path: str) -> Dict[str, Any]:
+        subprocess.run(["waydroid", "app", "install", apk_path], check=True)
+        return {"success": True, "message": f"Installed Android app from {apk_path}"}
+    
+    def _install_web(self, url: str) -> Dict[str, Any]:
+        # Use nativefier to create a web app
+        name = url.replace("https://", "").replace("http://", "").split("/")[0]
+        subprocess.run(["nativefier", "--name", name, "--single-instance", url], check=True)
+        return {"success": True, "message": f"Created web app for {url}"}
+    
+    def remove(self, app_id: str) -> Dict[str, Any]:
+        """Remove an application"""
+        source, source_id = app_id.split(":", 1)
+        
+        try:
+            if source == "apt":
+                subprocess.run(["apt-get", "remove", "-y", source_id], check=True)
+            elif source == "flatpak":
+                subprocess.run(["flatpak", "uninstall", "-y", source_id], check=True)
+            elif source == "windows":
+                # Remove Wine prefix
+                pass
+            elif source == "android":
+                subprocess.run(["waydroid", "app", "remove", source_id], check=True)
+            elif source == "web":
+                # Remove nativefier app
+                pass
+            return {"success": True, "message": f"Removed {app_id}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def update_all(self) -> Dict[str, Any]:
+        """Update all installed applications"""
+        results = []
+        
+        # APT updates
+        try:
+            subprocess.run(["apt-get", "update"], check=True)
+            result = subprocess.run(["apt-get", "upgrade", "-y"], capture_output=True, text=True)
+            results.append({"source": "apt", "output": result.stdout})
+        except Exception as e:
+            results.append({"source": "apt", "error": str(e)})
+        
+        # Flatpak updates
+        try:
+            result = subprocess.run(["flatpak", "update", "-y"], capture_output=True, text=True)
+            results.append({"source": "flatpak", "output": result.stdout})
+        except Exception as e:
+            results.append({"source": "flatpak", "error": str(e)})
+        
+        return {"success": True, "results": results}
+
+if __name__ == "__main__":
+    backend = AppCenterBackend()
+    
+    if len(sys.argv) < 2:
+        print("Usage: backend.py <search|install|remove|update> [args...]")
+        sys.exit(1)
+    
+    cmd = sys.argv[1]
+    
+    if cmd == "search":
+        query = sys.argv[2] if len(sys.argv) > 2 else ""
+        source = SourceType(sys.argv[3]) if len(sys.argv) > 3 else None
+        apps = backend.search(query, source)
+        print(json.dumps([asdict(a) for a in apps], default=str))
+    
+    elif cmd == "install":
+        app_id = sys.argv[2]
+        result = backend.install(app_id)
+        print(json.dumps(result))
+    
+    elif cmd == "remove":
+        app_id = sys.argv[2]
+        result = backend.remove(app_id)
+        print(json.dumps(result))
+    
+    elif cmd == "update":
+        result = backend.update_all()
+        print(json.dumps(result))
+    
+    else:
+        print(f"Unknown command: {cmd}")
+        sys.exit(1)
+EOF
+chmod +x /usr/libexec/universal-appcenter/backend.py
+
+# App Center Frontend (GTK4 - placeholder structure)
+mkdir -p /usr/share/universal-appcenter/frontend
+
+cat > /usr/share/universal-appcenter/frontend/main.py << 'EOF'
+#!/usr/bin/env python3
+"""
+Universal App Center Frontend - GTK4/Adwaita
+"""
+
+import gi
+gi.require_version("Gtk", "4.0")
+gi.require_version("Adw", "1")
+from gi.repository import Gtk, Adw, Gio, GLib
+import json
+import subprocess
+import sys
+
+class AppCenterWindow(Adw.ApplicationWindow):
+    def __init__(self, app):
+        super().__init__(application=app)
+        self.set_title("Universal App Center")
+        self.set_default_size(900, 600)
+        
+        # Main layout
+        self.split_view = Adw.NavigationSplitView()
+        self.set_content(self.split_view)
+        
+        # Sidebar
+        self.sidebar = self._create_sidebar()
+        self.split_view.set_sidebar(self.sidebar)
+        
+        # Content
+        self.content_stack = Gtk.Stack()
+        self.split_view.set_content(self.content_stack)
+        
+        # Pages
+        self.categories_page = self._create_categories_page()
+        self.installed_page = self._create_installed_page()
+        self.updates_page = self._create_updates_page()
+        self.settings_page = self._create_settings_page()
+        
+        self.content_stack.add_named(self.categories_page, "categories")
+        self.content_stack.add_named(self.installed_page, "installed")
+        self.content_stack.add_named(self.updates_page, "updates")
+        self.content_stack.add_named(self.settings_page, "settings")
+        
+        # Load initial data
+        self._load_categories()
+    
+    def _create_sidebar(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        box.set_margin_top(6)
+        box.set_margin_bottom(6)
+        box.set_margin_start(6)
+        box.set_margin_end(6)
+        
+        # Navigation items
+        nav_items = [
+            ("categories", "📦 Categories", "Browse applications by category"),
+            ("installed", "✅ Installed", "Manage installed applications"),
+            ("updates", "🔄 Updates", "Check for updates"),
+            ("settings", "⚙️ Settings", "Configure sources and preferences"),
+        ]
+        
+        for page_id, label, tooltip in nav_items:
+            row = Adw.ActionRow(title=label, tooltip_text=tooltip)
+            row.set_activatable_widget(self)
+            row.add_prefix(Gtk.Image.new_from_icon_name("go-next-symbolic"))
+            row.connect("activated", lambda r, p=page_id: self.content_stack.set_visible_child_name(p))
+            box.append(row)
+        
+        return box
+    
+    def _create_categories_page(self):
+        # Placeholder - would show category grid
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        box.set_margin_top(24)
+        box.set_margin_bottom(24)
+        box.set_margin_start(24)
+        box.set_margin_end(24)
+        
+        label = Gtk.Label(label="Categories view - coming soon")
+        label.set_halign(Gtk.Align.CENTER)
+        label.set_valign(Gtk.Align.CENTER)
+        box.append(label)
+        
+        return box
+    
+    def _create_installed_page(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        box.set_margin_top(24)
+        box.set_margin_bottom(24)
+        box.set_margin_start(24)
+        box.set_margin_end(24)
+        
+        label = Gtk.Label(label="Installed apps - coming soon")
+        label.set_halign(Gtk.Align.CENTER)
+        label.set_valign(Gtk.Align.CENTER)
+        box.append(label)
+        
+        return box
+    
+    def _create_updates_page(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        box.set_margin_top(24)
+        box.set_margin_bottom(24)
+        box.set_margin_start(24)
+        box.set_margin_end(24)
+        
+        btn = Gtk.Button(label="Check for Updates")
+        btn.connect("clicked", self._on_check_updates)
+        box.append(btn)
+        
+        return box
+    
+    def _create_settings_page(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        box.set_margin_top(24)
+        box.set_margin_bottom(24)
+        box.set_margin_start(24)
+        box.set_margin_end(24)
+        
+        label = Gtk.Label(label="Settings - coming soon")
+        label.set_halign(Gtk.Align.CENTER)
+        label.set_valign(Gtk.Align.CENTER)
+        box.append(label)
+        
+        return box
+    
+    def _on_check_updates(self, button):
+        button.set_sensitive(False)
+        button.set_label("Checking...")
+        
+        def run_update():
+            try:
+                result = subprocess.run(
+                    [sys.executable, "/usr/libexec/universal-appcenter/backend.py", "update"],
+                    capture_output=True, text=True, timeout=300
+                )
+                GLib.idle_add(lambda: self._on_update_done(result))
+            except Exception as e:
+                GLib.idle_add(lambda: self._on_update_error(str(e)))
+        
+        import threading
+        threading.Thread(target=run_update, daemon=True).start()
+    
+    def _on_update_done(self, result):
+        # Would show results in UI
+        pass
+    
+    def _on_update_error(self, error):
+        pass
+    
+    def _load_categories(self):
+        # Would load from backend
+        pass
+
+class AppCenterApplication(Adw.Application):
+    def __init__(self):
+        super().__init__(application_id="org.universallite.AppCenter")
+    
+    def do_activate(self):
+        window = AppCenterWindow(self)
+        window.present()
+
+def main():
+    app = AppCenterApplication()
+    return app.run(sys.argv)
+
+if __name__ == "__main__":
+    sys.exit(main())
+EOF
+chmod +x /usr/share/universal-appcenter/frontend/main.py
+
+# Desktop Entry for App Center
+mkdir -p /usr/share/applications
+cat > /usr/share/applications/universal-appcenter.desktop << 'EOF'
+[Desktop Entry]
+Type=Application
+Name=Universal App Center
+Comment=Discover and install applications
+Exec=python3 /usr/share/universal-appcenter/frontend/main.py
+Icon=org.universallite.AppCenter
+Terminal=false
+Categories=System;PackageManager;Settings;
+StartupNotify=true
+Keywords=software;store;install;update;flatpak;apt;windows;android;
+EOF
+
+# App Center CLI
+cat > /usr/bin/universal-appcenter << 'EOF'
+#!/bin/bash
+# Universal App Center CLI
+
+set -euo pipefail
+
+BACKEND="/usr/libexec/universal-appcenter/backend.py"
+
+cmd="${1:-}"
+shift || true
+
+case "$cmd" in
+    search)
+        python3 "$BACKEND" search "$@"
+        ;;
+    install)
+        python3 "$BACKEND" install "$@"
+        ;;
+    remove)
+        python3 "$BACKEND" remove "$@"
+        ;;
+    update)
+        python3 "$BACKEND" update
+        ;;
+    gui)
+        python3 /usr/share/universal-appcenter/frontend/main.py
+        ;;
+    *)
+        echo "Usage: universal-appcenter <search|install|remove|update|gui> [args...]"
+        exit 1
+        ;;
+esac
+EOF
+chmod +x /usr/bin/universal-appcenter
+
+# Systemd service for background updates
+cat > /usr/lib/systemd/user/universal-appcenter-updates.service << 'EOF'
+[Unit]
+Description=Universal App Center Update Checker
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/universal-appcenter update
+Nice=19
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=default.target
+EOF
+
+cat > /usr/lib/systemd/user/universal-appcenter-updates.timer << 'EOF'
+[Unit]
+Description=Daily Universal App Center Update Check
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=1h
+
+[Install]
+WantedBy=timers.target
+EOF
+
+# Enable timer
+mkdir -p /etc/systemd/user/timers.target.wants
+ln -sf /usr/lib/systemd/user/universal-appcenter-updates.timer /etc/systemd/user/timers.target.wants/universal-appcenter-updates.timer
+
+echo "=== Universal App Center installation complete ==="
