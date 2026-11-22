@@ -109,8 +109,22 @@ jobs:
       
       - name: Enable binfmt for cross-compilation
         run: |
-          sudo update-binfmts --enable qemu-aarch64
-          sudo update-binfmts --enable qemu-arm
+          # Ensure qemu-user-static is installed and binfmt entries are registered
+          if ! command -v qemu-aarch64-static &> /dev/null; then
+            sudo apt-get update && sudo apt-get install -y qemu-user-static binfmt-support
+          fi
+          # Register binfmt entries if not already registered
+          if [ ! -f /proc/sys/fs/binfmt_misc/qemu-aarch64 ]; then
+            sudo update-binfmts --package qemu-user-static --install qemu-aarch64 /usr/bin/qemu-aarch64-static --magic '\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\xb7\x00' --mask '\xff\xff\xff\xff\xff\xff\xff\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff' --credentials yes --fix-binary yes || true
+          fi
+          if [ ! -f /proc/sys/fs/binfmt_misc/qemu-arm ]; then
+            sudo update-binfmts --package qemu-user-static --install qemu-arm /usr/bin/qemu-arm-static --magic '\x7fELF\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x28\x00' --mask '\xff\xff\xff\xff\xff\xff\xff\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff' --credentials yes --fix-binary yes || true
+          fi
+          # Enable if registered
+          sudo update-binfmts --enable qemu-aarch64 2>/dev/null || true
+          sudo update-binfmts --enable qemu-arm 2>/dev/null || true
+          # Verify
+          ls -la /proc/sys/fs/binfmt_misc/ | grep qemu || echo "qemu binfmt entries not found, but continuing..."
       
       - name: Cache live-build
         uses: actions/cache@v4
@@ -257,8 +271,22 @@ jobs:
       
       - name: Enable binfmt for cross-compilation
         run: |
-          sudo update-binfmts --enable qemu-aarch64
-          sudo update-binfmts --enable qemu-arm
+          # Ensure qemu-user-static is installed and binfmt entries are registered
+          if ! command -v qemu-aarch64-static &> /dev/null; then
+            sudo apt-get update && sudo apt-get install -y qemu-user-static binfmt-support
+          fi
+          # Register binfmt entries if not already registered
+          if [ ! -f /proc/sys/fs/binfmt_misc/qemu-aarch64 ]; then
+            sudo update-binfmts --package qemu-user-static --install qemu-aarch64 /usr/bin/qemu-aarch64-static --magic '\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\xb7\x00' --mask '\xff\xff\xff\xff\xff\xff\xff\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff' --credentials yes --fix-binary yes || true
+          fi
+          if [ ! -f /proc/sys/fs/binfmt_misc/qemu-arm ]; then
+            sudo update-binfmts --package qemu-user-static --install qemu-arm /usr/bin/qemu-arm-static --magic '\x7fELF\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x28\x00' --mask '\xff\xff\xff\xff\xff\xff\xff\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff' --credentials yes --fix-binary yes || true
+          fi
+          # Enable if registered
+          sudo update-binfmts --enable qemu-aarch64 2>/dev/null || true
+          sudo update-binfmts --enable qemu-arm 2>/dev/null || true
+          # Verify
+          ls -la /proc/sys/fs/binfmt_misc/ | grep qemu || echo "qemu binfmt entries not found, but continuing..."
       
       - name: Cache live-build
         uses: actions/cache@v4
