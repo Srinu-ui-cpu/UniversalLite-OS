@@ -415,7 +415,7 @@ jobs:
       
       - name: Enable binfmt for cross-compilation
         run: |
-          sudo update-binfmts --enable qemu-arm
+          sudo update-binfmts --enable qemu-arm 2>/dev/null || echo "binfmt enable failed, continuing..."
       
       - name: Cache live-build
         uses: actions/cache@v4
