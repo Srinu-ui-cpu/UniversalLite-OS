@@ -76,21 +76,41 @@ lb clean --purge 2>/dev/null || true
 # Configure live-build with simplified options
 echo "Configuring live-build..."
 
-lb config noauto \
-    --architectures "$ARCHIVE" \
-    --distribution "$DISTRIBUTION" \
-    --archive-areas "main contrib non-free" \
-    --binary-filesystem ext4 \
-    --binary-images iso-hybrid \
-    --bootappend-live "boot=live quiet splash" \
-    --chroot-filesystem ext4 \
-    --compression gzip \
-    --debootstrap-options "--variant=minbase" \
-    --iso-application "UniversalLite OS" \
-    --iso-volume "UniversalLite" \
-    --mode debian || {
-        echo "ERROR: lb config failed"
-        exit 1
-    }
+# Test each option individually
+echo "Testing --architectures..."
+lb config noauto --architectures "$ARCHIVE" || { echo "ERROR: --architectures failed"; exit 1; }
+
+echo "Testing --distribution..."
+lb config noauto --distribution "$DISTRIBUTION" || { echo "ERROR: --distribution failed"; exit 1; }
+
+echo "Testing --archive-areas..."
+lb config noauto --archive-areas "main contrib non-free non-free-firmware" || { echo "ERROR: --archive-areas failed"; exit 1; }
+
+echo "Testing --binary-filesystem..."
+lb config noauto --binary-filesystem ext4 || { echo "ERROR: --binary-filesystem failed"; exit 1; }
+
+echo "Testing --binary-images..."
+lb config noauto --binary-images iso-hybrid || { echo "ERROR: --binary-images failed"; exit 1; }
+
+echo "Testing --bootappend-live..."
+lb config noauto --bootappend-live "boot=live quiet splash" || { echo "ERROR: --bootappend-live failed"; exit 1; }
+
+echo "Testing --chroot-filesystem..."
+lb config noauto --chroot-filesystem ext4 || { echo "ERROR: --chroot-filesystem failed"; exit 1; }
+
+echo "Testing --compression..."
+lb config noauto --compression gzip || { echo "ERROR: --compression failed"; exit 1; }
+
+echo "Testing --debootstrap-options..."
+lb config noauto --debootstrap-options "--variant=minbase" || { echo "ERROR: --debootstrap-options failed"; exit 1; }
+
+echo "Testing --iso-application..."
+lb config noauto --iso-application "UniversalLite OS" || { echo "ERROR: --iso-application failed"; exit 1; }
+
+echo "Testing --iso-volume..."
+lb config noauto --iso-volume "UniversalLite" || { echo "ERROR: --iso-volume failed"; exit 1; }
+
+echo "Testing --mode..."
+lb config noauto --mode debian || { echo "ERROR: --mode failed"; exit 1; }
 
 echo "=== Configuration complete ==="
