@@ -90,8 +90,7 @@ lb config noauto \
     --iso-application "UniversalLite OS" \
     --iso-volume "UniversalLite" \
     --mode debian \
-    --security true \
-    --variant "$VARIANT" || {
+    --security true || {
         echo "ERROR: lb config failed"
         exit 1
     }
