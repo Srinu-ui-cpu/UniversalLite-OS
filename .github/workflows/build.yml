@@ -59,6 +59,7 @@ jobs:
       
       - name: Set up build environment
         run: |
+          set -e
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends software-properties-common
           sudo add-apt-repository -y universe
@@ -82,35 +83,39 @@ jobs:
             binfmt-support \
             debootstrap \
             squashfs-tools \
-            zstd \
-            || true
+            zstd
           # Install live-build from source (not in Ubuntu repos)
           if ! command -v lb &> /dev/null; then
-            sudo apt-get install -y --no-install-recommends devscripts equivs || true
-            git clone https://salsa.debian.org/live-team/live-build.git /tmp/live-build \
-              && cd /tmp/live-build \
-              && dpkg-buildpackage -b -us -uc \
-              && sudo dpkg -i ../live-build_*.deb || true
+            echo "live-build not found, building from source..."
+            sudo apt-get install -y --no-install-recommends devscripts equivs || exit 1
+            git clone https://salsa.debian.org/live-team/live-build.git /tmp/live-build || exit 1
+            cd /tmp/live-build
+            dpkg-buildpackage -b -us -uc || exit 1
+            sudo dpkg -i ../live-build_*.deb || exit 1
           fi
           # Install erofs-utils from source if not available
           if ! command -v mkfs.erofs &> /dev/null; then
-            sudo apt-get install -y --no-install-recommends autoconf automake libtool pkg-config liblz4-dev libzstd-dev || true
-            git clone https://git.kernel.org/pub/scm/linux/kernel/git/xiang/erofs-utils.git /tmp/erofs-utils \
-              && cd /tmp/erofs-utils \
-              && ./autogen.sh \
-              && ./configure \
-              && make -j$(nproc) \
-              && sudo make install || true
+            echo "erofs-utils not found, building from source..."
+            sudo apt-get install -y --no-install-recommends autoconf automake libtool pkg-config liblz4-dev libzstd-dev || exit 1
+            git clone https://git.kernel.org/pub/scm/linux/kernel/git/xiang/erofs-utils.git /tmp/erofs-utils || exit 1
+            cd /tmp/erofs-utils
+            ./autogen.sh || exit 1
+            ./configure || exit 1
+            make -j$(nproc) || exit 1
+            sudo make install || exit 1
           fi
           # Install b3sum (b3) from cargo if not available
           if ! command -v b3sum &> /dev/null; then
-            sudo apt-get install -y --no-install-recommends cargo || true
-            cargo install b3sum --locked || true
+            echo "b3sum not found, installing from cargo..."
+            sudo apt-get install -y --no-install-recommends cargo || exit 1
+            cargo install b3sum --locked || exit 1
             sudo cp ~/.cargo/bin/b3sum /usr/local/bin/ 2>/dev/null || true
           fi
           # Verify installations
+          echo "Verifying lb..."
           lb --version
-          mkfs.erofs --version 2>/dev/null || echo "erofs-utils not fully available, will use fallback"
+          echo "Verifying mkfs.erofs..."
+          mkfs.erofs --version || echo "erofs-utils fallback may be needed"
       
       - name: Enable binfmt for cross-compilation
         run: |
@@ -230,6 +235,7 @@ jobs:
       
       - name: Set up build environment
         run: |
+          set -e
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends software-properties-common
           sudo add-apt-repository -y universe
@@ -257,35 +263,39 @@ jobs:
             gcc-aarch64-linux-gnu \
             g++-aarch64-linux-gnu \
             u-boot-tools \
-            device-tree-compiler \
-            || true
+            device-tree-compiler
           # Install live-build from source (not in Ubuntu repos)
           if ! command -v lb &> /dev/null; then
-            sudo apt-get install -y --no-install-recommends devscripts equivs || true
-            git clone https://salsa.debian.org/live-team/live-build.git /tmp/live-build \
-              && cd /tmp/live-build \
-              && dpkg-buildpackage -b -us -uc \
-              && sudo dpkg -i ../live-build_*.deb || true
+            echo "live-build not found, building from source..."
+            sudo apt-get install -y --no-install-recommends devscripts equivs || exit 1
+            git clone https://salsa.debian.org/live-team/live-build.git /tmp/live-build || exit 1
+            cd /tmp/live-build
+            dpkg-buildpackage -b -us -uc || exit 1
+            sudo dpkg -i ../live-build_*.deb || exit 1
           fi
           # Install erofs-utils from source if not available
           if ! command -v mkfs.erofs &> /dev/null; then
-            sudo apt-get install -y --no-install-recommends autoconf automake libtool pkg-config liblz4-dev libzstd-dev || true
-            git clone https://git.kernel.org/pub/scm/linux/kernel/git/xiang/erofs-utils.git /tmp/erofs-utils \
-              && cd /tmp/erofs-utils \
-              && ./autogen.sh \
-              && ./configure \
-              && make -j$(nproc) \
-              && sudo make install || true
+            echo "erofs-utils not found, building from source..."
+            sudo apt-get install -y --no-install-recommends autoconf automake libtool pkg-config liblz4-dev libzstd-dev || exit 1
+            git clone https://git.kernel.org/pub/scm/linux/kernel/git/xiang/erofs-utils.git /tmp/erofs-utils || exit 1
+            cd /tmp/erofs-utils
+            ./autogen.sh || exit 1
+            ./configure || exit 1
+            make -j$(nproc) || exit 1
+            sudo make install || exit 1
           fi
           # Install b3sum (b3) from cargo if not available
           if ! command -v b3sum &> /dev/null; then
-            sudo apt-get install -y --no-install-recommends cargo || true
-            cargo install b3sum --locked || true
+            echo "b3sum not found, installing from cargo..."
+            sudo apt-get install -y --no-install-recommends cargo || exit 1
+            cargo install b3sum --locked || exit 1
             sudo cp ~/.cargo/bin/b3sum /usr/local/bin/ 2>/dev/null || true
           fi
           # Verify installations
+          echo "Verifying lb..."
           lb --version
-          mkfs.erofs --version 2>/dev/null || echo "erofs-utils not fully available, will use fallback"
+          echo "Verifying mkfs.erofs..."
+          mkfs.erofs --version || echo "erofs-utils fallback may be needed"
       
       - name: Enable binfmt for cross-compilation
         run: |
@@ -419,6 +429,7 @@ jobs:
       
       - name: Set up build environment
         run: |
+          set -e
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends software-properties-common
           sudo add-apt-repository -y universe
@@ -446,35 +457,39 @@ jobs:
             gcc-arm-linux-gnueabihf \
             g++-arm-linux-gnueabihf \
             u-boot-tools \
-            device-tree-compiler \
-            || true
+            device-tree-compiler
           # Install live-build from source (not in Ubuntu repos)
           if ! command -v lb &> /dev/null; then
-            sudo apt-get install -y --no-install-recommends devscripts equivs || true
-            git clone https://salsa.debian.org/live-team/live-build.git /tmp/live-build \
-              && cd /tmp/live-build \
-              && dpkg-buildpackage -b -us -uc \
-              && sudo dpkg -i ../live-build_*.deb || true
+            echo "live-build not found, building from source..."
+            sudo apt-get install -y --no-install-recommends devscripts equivs || exit 1
+            git clone https://salsa.debian.org/live-team/live-build.git /tmp/live-build || exit 1
+            cd /tmp/live-build
+            dpkg-buildpackage -b -us -uc || exit 1
+            sudo dpkg -i ../live-build_*.deb || exit 1
           fi
           # Install erofs-utils from source if not available
           if ! command -v mkfs.erofs &> /dev/null; then
-            sudo apt-get install -y --no-install-recommends autoconf automake libtool pkg-config liblz4-dev libzstd-dev || true
-            git clone https://git.kernel.org/pub/scm/linux/kernel/git/xiang/erofs-utils.git /tmp/erofs-utils \
-              && cd /tmp/erofs-utils \
-              && ./autogen.sh \
-              && ./configure \
-              && make -j$(nproc) \
-              && sudo make install || true
+            echo "erofs-utils not found, building from source..."
+            sudo apt-get install -y --no-install-recommends autoconf automake libtool pkg-config liblz4-dev libzstd-dev || exit 1
+            git clone https://git.kernel.org/pub/scm/linux/kernel/git/xiang/erofs-utils.git /tmp/erofs-utils || exit 1
+            cd /tmp/erofs-utils
+            ./autogen.sh || exit 1
+            ./configure || exit 1
+            make -j$(nproc) || exit 1
+            sudo make install || exit 1
           fi
           # Install b3sum (b3) from cargo if not available
           if ! command -v b3sum &> /dev/null; then
-            sudo apt-get install -y --no-install-recommends cargo || true
-            cargo install b3sum --locked || true
+            echo "b3sum not found, installing from cargo..."
+            sudo apt-get install -y --no-install-recommends cargo || exit 1
+            cargo install b3sum --locked || exit 1
             sudo cp ~/.cargo/bin/b3sum /usr/local/bin/ 2>/dev/null || true
           fi
           # Verify installations
+          echo "Verifying lb..."
           lb --version
-          mkfs.erofs --version 2>/dev/null || echo "erofs-utils not fully available, will use fallback"
+          echo "Verifying mkfs.erofs..."
+          mkfs.erofs --version || echo "erofs-utils fallback may be needed"
       
       - name: Enable binfmt for cross-compilation
         run: |
