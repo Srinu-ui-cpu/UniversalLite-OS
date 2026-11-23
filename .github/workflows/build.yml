@@ -63,7 +63,12 @@ jobs:
           sudo apt-get install -y --no-install-recommends software-properties-common
           sudo add-apt-repository -y universe
           sudo apt-get update
-          # Install core packages + live-build from Ubuntu universe
+          # Install live-build from Debian backports for Debian compatibility
+          echo "deb http://deb.debian.org/debian bookworm-backports main" | sudo tee /etc/apt/sources.list.d/backports.list
+          echo "deb http://deb.debian.org/debian bookworm main" | sudo tee /etc/apt/sources.list.d/debian.list
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends -t bookworm-backports live-build
+          # Install core packages
           sudo apt-get install -y --no-install-recommends \
             xorriso \
             grub-efi-amd64 \
@@ -83,7 +88,6 @@ jobs:
             debootstrap \
             squashfs-tools \
             zstd \
-            live-build \
             erofs-utils \
             b3sum || echo "Some packages may need manual install, continuing..."
           # Verify installations
@@ -213,7 +217,12 @@ jobs:
           sudo apt-get install -y --no-install-recommends software-properties-common
           sudo add-apt-repository -y universe
           sudo apt-get update
-          # Install core packages + live-build from Ubuntu universe
+          # Install live-build from Debian backports for Debian compatibility
+          echo "deb http://deb.debian.org/debian bookworm-backports main" | sudo tee /etc/apt/sources.list.d/backports.list
+          echo "deb http://deb.debian.org/debian bookworm main" | sudo tee /etc/apt/sources.list.d/debian.list
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends -t bookworm-backports live-build
+          # Install core packages
           sudo apt-get install -y --no-install-recommends \
             xorriso \
             grub-efi-arm64 \
@@ -237,7 +246,6 @@ jobs:
             g++-aarch64-linux-gnu \
             u-boot-tools \
             device-tree-compiler \
-            live-build \
             erofs-utils \
             b3sum || echo "Some packages may need manual install, continuing..."
           # Verify installations
@@ -381,7 +389,12 @@ jobs:
           sudo apt-get install -y --no-install-recommends software-properties-common
           sudo add-apt-repository -y universe
           sudo apt-get update
-          # Install core packages + live-build from Ubuntu universe
+          # Install live-build from Debian backports for Debian compatibility
+          echo "deb http://deb.debian.org/debian bookworm-backports main" | sudo tee /etc/apt/sources.list.d/backports.list
+          echo "deb http://deb.debian.org/debian bookworm main" | sudo tee /etc/apt/sources.list.d/debian.list
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends -t bookworm-backports live-build
+          # Install core packages
           sudo apt-get install -y --no-install-recommends \
             xorriso \
             grub-efi-arm64 \
@@ -405,7 +418,6 @@ jobs:
             g++-arm-linux-gnueabihf \
             u-boot-tools \
             device-tree-compiler \
-            live-build \
             erofs-utils \
             b3sum || echo "Some packages may need manual install, continuing..."
           # Verify installations
