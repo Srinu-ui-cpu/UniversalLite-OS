@@ -19,10 +19,10 @@ on:
         options: [ultra-lite, balanced, performance]
         default: 'balanced'
       distribution:
-        description: 'Debian distribution'
-        type: choice
-        options: [trixie, bookworm]
-        default: 'trixie'
+            description: 'Debian distribution'
+            type: choice
+            options: [trixie, bookworm]
+            default: 'bookworm'
       sign:
         description: 'Sign ISO with GPG'
         type: boolean
@@ -42,7 +42,7 @@ jobs:
       fail-fast: false
       matrix:
         variant: [ultra-lite, balanced, performance]
-        distribution: [trixie]
+        distribution: [bookworm]
         include:
           - variant: ultra-lite
             ram_target: "73MB"
@@ -192,7 +192,7 @@ jobs:
       fail-fast: false
       matrix:
         variant: [ultra-lite, balanced, performance]
-        distribution: [trixie]
+        distribution: [bookworm]
         include:
           - variant: ultra-lite
             ram_target: "73MB"
