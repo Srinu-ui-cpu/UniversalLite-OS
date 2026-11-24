@@ -1,36 +1,28 @@
 #!/bin/bash
 # UniversalLite OS - Live Build Auto Script
-# Minimal working version for GitHub Actions with Debian mirrors
+# Docker-compatible version for Debian containers
 
-set -o pipefail
+set -e
 
 # Parse command line arguments
+ARCH="amd64"
+DISTRIBUTION="bookworm"
+VARIANT="balanced"
+
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --arch)
-            ARCH="$2"
-            shift 2
-            ;;
-        --distribution)
-            DISTRIBUTION="$2"
-            shift 2
-            ;;
-        --variant)
-            VARIANT="$2"
-            shift 2
-            ;;
-        *)
-            shift
-            ;;
+        --arch) ARCH="$2"; shift 2 ;;
+        --distribution) DISTRIBUTION="$2"; shift 2 ;;
+        --variant) VARIANT="$2"; shift 2 ;;
+        *) shift ;;
     esac
 done
 
 # Environment variables as fallback
-ARCH="${ARCH:-$(dpkg --print-architecture 2>/dev/null || echo amd64)}"
+ARCH="${ARCH:-amd64}"
 DISTRIBUTION="${DISTRIBUTION:-bookworm}"
 VARIANT="${VARIANT:-balanced}"
 
-export LB_BOOTSTRAP_INCLUDE="apt-transport-https ca-certificates curl gnupg"
 export DEBIAN_FRONTEND=noninteractive
 
 echo "=== UniversalLite OS Build ==="
@@ -48,14 +40,6 @@ esac
 
 echo "Using archive: $ARCHIVE"
 
-# Verify live-build
-if ! command -v lb &> /dev/null; then
-    echo "ERROR: lb command not found"
-    exit 1
-fi
-
-echo "lb version: $(lb --version 2>/dev/null || echo 'unknown')"
-
 # Clean previous build
 lb clean --purge 2>/dev/null || true
 
@@ -71,9 +55,7 @@ lb config noauto \
     --mirror-bootstrap "http://deb.debian.org/debian/" \
     --mirror-chroot "http://deb.debian.org/debian/" \
     --mirror-binary "http://deb.debian.org/debian/" \
-    --mirror-debian-installer "http://deb.debian.org/debian/" || {
-        echo "ERROR: lb config failed"
-        exit 1
-    }
+    --mirror-debian-installer "http://deb.debian.org/debian/" \
+    --bootappend-live "boot=live components username=universalite hostname=universalite noapic"
 
 echo "=== Configuration complete ==="
